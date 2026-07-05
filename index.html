@@ -8,26 +8,41 @@
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght=400;500;700&amp;display=swap" rel="stylesheet">
   <style>
     body { font-family: 'DM Sans', sans-serif; }
     .tab-active { border-bottom: 3px solid #1d4ed8; color: #1d4ed8; font-weight: 700; }
+    
+    @media print {
+      body * { visibility: hidden; }
+      #print-area, #print-area * { visibility: visible; }
+      #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print { display: none !important; }
+    }
   </style>
  </head>
  <body class="min-h-screen bg-gray-50">
-  <header class="bg-white p-4 shadow-sm border-b text-center">
+  
+  <header class="bg-white p-4 shadow-sm border-b text-center no-print">
    <h1 class="text-xl font-bold text-blue-600">Absensi QR Universal</h1>
    <p class="text-xs text-gray-500">Manajemen Data &amp; Sinkronisasi Spreadsheet</p>
   </header>
   
-  <nav class="flex border-b bg-white sticky top-0 z-10">
-   <button id="tab-scanner" class="flex-1 py-3 text-center tab-active" onclick="switchTab('scanner')"><i data-lucide="scan" class="inline w-4 h-4 mr-1"></i>Scanner</button> 
-   <button id="tab-siswa" class="flex-1 py-3 text-center text-gray-600" onclick="switchTab('siswa')"><i data-lucide="users" class="inline w-4 h-4 mr-1"></i>Siswa</button> 
-   <button id="tab-laporan" class="flex-1 py-3 text-center text-gray-600" onclick="switchTab('laporan')"><i data-lucide="file-text" class="inline w-4 h-4 mr-1"></i>Laporan</button>
+  <nav class="flex border-b bg-white sticky top-0 z-10 no-print">
+   <button id="tab-scanner" class="flex-1 py-3 text-center tab-active" onclick="switchTab('scanner')">
+     <i data-lucide="scan" class="inline w-4 h-4 mr-1"></i>Scanner
+   </button> 
+   <button id="tab-siswa" class="flex-1 py-3 text-center text-gray-600" onclick="switchTab('siswa')">
+     <i data-lucide="users" class="inline w-4 h-4 mr-1"></i>Siswa
+   </button> 
+   <button id="tab-laporan" class="flex-1 py-3 text-center text-gray-600" onclick="switchTab('laporan')">
+     <i data-lucide="file-text" class="inline w-4 h-4 mr-1"></i>Laporan
+   </button>
   </nav>
 
   <main class="max-w-2xl mx-auto p-4">
-   <section id="panel-scanner">
+   
+   <section id="panel-scanner" class="no-print">
     <p class="text-center text-gray-600 mb-4 text-sm">Arahkan kamera ke QR Code berisi ID atau Nama Siswa</p>
     
     <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-4 text-center overflow-hidden">
@@ -39,10 +54,10 @@
      </div>
      
      <div class="flex gap-2">
-       <button type="button" onclick="startCamera()" class="flex-1 py-2 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 text-sm">
+       <button type="button" onclick="startCamera()" class="flex-1 py-2 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 text-sm shadow">
          <i data-lucide="video" class="inline w-4 h-4 mr-1"></i>Aktifkan Kamera
        </button>
-       <button type="button" onclick="stopCamera()" class="flex-1 py-2 rounded-lg font-semibold text-white bg-gray-600 hover:bg-gray-700 text-sm">
+       <button type="button" onclick="stopCamera()" class="flex-1 py-2 rounded-lg font-semibold text-white bg-gray-600 hover:bg-gray-700 text-sm shadow">
          <i data-lucide="video-off" class="inline w-4 h-4 mr-1"></i>Matikan Kamera
        </button>
      </div>
@@ -57,30 +72,69 @@
    </section>
 
    <section id="panel-siswa" class="hidden">
-    <div class="flex justify-between items-center mb-4 bg-white p-3 rounded-lg border shadow-sm">
-      <h3 class="font-bold text-gray-800 text-sm flex items-center gap-2">
-        <i data-lucide="database" class="w-4 h-4 text-blue-600"></i> Data Terdaftar di Spreadsheet
-      </h3>
-      <button onclick="syncDataFromSpreadsheet()" class="text-xs font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
-        <i data-lucide="refresh-cw" class="w-3 h-3"></i> Sync Data
-      </button>
+    <div class="bg-white p-3 rounded-lg border shadow-sm mb-4 no-print">
+      <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+        <h3 class="font-bold text-gray-800 text-sm flex items-center gap-2">
+          <i data-lucide="database" class="w-4 h-4 text-blue-600"></i> Data Terdaftar di Spreadsheet
+        </h3>
+        <div class="flex items-center gap-2">
+          <button onclick="syncDataFromSpreadsheet()" class="text-xs font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Sync Data
+          </button>
+          <button onclick="printQRCodeSiswa()" class="text-xs font-semibold bg-green-600 text-white hover:bg-green-700 px-3 py-1.5 rounded-lg flex items-center gap-1 transition shadow">
+            <i data-lucide="printer" class="w-3 h-3"></i> Cetak QR
+          </button>
+        </div>
+      </div>
+      
+      <div class="mt-3 pt-3 border-t flex items-center gap-2">
+        <label for="filter-kelas" class="text-xs font-semibold text-gray-600 shrink-0 mb-0">Pilih Kelas:</label>
+        <select id="filter-kelas" onchange="renderStudentList()" class="border rounded-lg px-2 py-1 text-xs flex-1 bg-gray-50 focus:outline-none focus:border-blue-500">
+          <option value="ALL">Semua Kelas</option>
+          <option value="7.1">7.1</option>
+          <option value="7.2">7.2</option>
+          <option value="7.3">7.3</option>
+          <option value="7.4">7.4</option>
+          <option value="7.5">7.5</option>
+        </select>
+      </div>
     </div>
     
-    <div id="student-list" class="space-y-4">Membuka data dari spreadsheet...</div>
+    <div id="print-area">
+      <div class="hidden print:block text-center mb-6 border-b pb-3">
+        <h2 class="text-xl font-bold text-gray-800">Daftar Kartu QR Code Siswa</h2>
+        <p id="print-kelas-info" class="text-sm text-gray-500">Kelas: Semua Kelas</p>
+      </div>
+      
+      <div id="student-list" class="space-y-4 print:grid print:grid-cols-2 print:gap-4 print:space-y-0">
+        Membuka data dari spreadsheet...
+      </div>
+    </div>
    </section>
 
-   <section id="panel-laporan" class="hidden">
+   <section id="panel-laporan" class="no-print hidden">
     <div class="bg-white p-4 rounded-lg border shadow-sm">
       <h2 class="font-bold text-gray-800 mb-3 text-sm">Riwayat Absensi Masuk</h2>
-      <div class="flex gap-2 mb-4">
+      
+      <div class="flex flex-col sm:flex-row gap-2 mb-4">
         <input type="date" id="filter-date" onchange="renderReport()" class="border rounded-lg px-3 py-2 text-sm flex-1"> 
+        <select id="filter-laporan-kelas" onchange="renderReport()" class="border rounded-lg px-3 py-2 text-sm flex-1 bg-gray-50 focus:outline-none focus:border-blue-500">
+          <option value="">pilih kelas</option>
+          <option value="7.1">7.1</option>
+          <option value="7.2">7.2</option>
+          <option value="7.3">7.3</option>
+          <option value="7.4">7.4</option>
+          <option value="7.5">7.5</option>
+        </select>
       </div>
+
       <div id="report-table-wrap" class="overflow-x-auto">
        <table class="w-full text-xs border-collapse">
         <thead>
          <tr class="bg-gray-100 text-gray-600">
           <th class="p-2 text-left border">ID QR</th>
           <th class="p-2 text-left border">Nama Terdeteksi</th>
+          <th class="p-2 text-left border">Kelas</th>
           <th class="p-2 text-left border">Waktu</th>
           <th class="p-2 text-left border">Status</th>
          </tr>
@@ -88,16 +142,13 @@
         <tbody id="report-body"></tbody>
        </table>
       </div>
-      <p id="report-empty" class="text-center text-gray-500 mt-4 text-sm hidden">Belum ada data absensi pada tanggal ini.</p>
+      <p id="report-empty" class="text-center text-gray-500 mt-4 text-sm">Silahkan pilih kelas terlebih dahulu untuk menampilkan data.</p>
     </div>
    </section>
   </main>
 
   <script>
-    // ==========================================
-    // MASUKKAN URL GOOGLE APPS SCRIPT ANDA DI SINI
-    // ==========================================
-    const SCRIPT_URL = "URL_APPS_SCRIPT_ANDA_DI_SINI";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyhRgYAMeVAqU8KtpgPrTsFaG33o_yirvppcINsV9qHUhiUM3E0oT13M7TiQ-kB1HGl/exec";
 
     let students = [];
     let attendanceData = [];
@@ -116,7 +167,7 @@
 
     async function syncDataFromSpreadsheet() {
       const container = document.getElementById('student-list');
-      container.innerHTML = '<p class="text-center text-gray-500 text-sm py-8 animate-pulse">Menyelaraskan data dengan Spreadsheet...</p>';
+      if(container) container.innerHTML = '<p class="text-center text-blue-500 text-sm py-8 animate-pulse">Sedang mengunduh data dari Spreadsheet...</p>';
       
       try {
         const resStudents = await fetch(`${SCRIPT_URL}?action=getStudents`);
@@ -125,11 +176,61 @@
         const resAttendance = await fetch(`${SCRIPT_URL}?action=getAttendance`);
         attendanceData = await resAttendance.json();
         
+        console.log("Sinkronisasi Selesai. Jumlah siswa terunduh:", students ? students.length : 0);
+        
         renderStudentList();
         renderReport();
       } catch (err) {
-        container.innerHTML = '<p class="text-center text-red-500 text-sm py-8">Gagal sinkronisasi data. Periksa koneksi internet atau SCRIPT_URL Anda.</p>';
+        console.error("Gagal melakukan Sinkronisasi Data:", err);
+        if(container) {
+          container.innerHTML = `
+            <div class="p-4 bg-red-50 border border-red-200 rounded-lg text-center text-red-800 text-xs">
+              <p class="font-bold mb-1">Gagal Menghubungkan ke Google Sheets!</p>
+              <p class="text-gray-600 mb-2">Pastikan Script URL Anda sudah benar dan sudah di-Deploy ulang sebagai "Anyone".</p>
+              <button onclick="syncDataFromSpreadsheet()" class="px-3 py-1 bg-red-600 text-white rounded font-semibold hover:bg-red-700">Coba Lagi</button>
+            </div>`;
+        }
       }
+    }
+
+    // EXTRAKSI TEXT ABSOLUT KELAS
+    function extractStudentKelas(student) {
+      if (!student) return "";
+      let cleanStudent = {};
+      Object.keys(student).forEach(key => {
+        cleanStudent[key.toString().toLowerCase().trim()] = student[key];
+      });
+      let foundKey = Object.keys(cleanStudent).find(k => k.includes('kelas') || k.includes('class') || k === 'kls');
+      if (foundKey && cleanStudent[foundKey] !== undefined && cleanStudent[foundKey] !== null) {
+        return cleanStudent[foundKey].toString().replace(/\s+/g, '').trim(); // Hapus spasi di dalam text teks
+      }
+      return "";
+    }
+
+    function extractStudentName(student) {
+      if (!student) return "";
+      let cleanStudent = {};
+      Object.keys(student).forEach(key => {
+        cleanStudent[key.toString().toLowerCase().trim()] = student[key];
+      });
+      let foundKey = Object.keys(cleanStudent).find(k => k.includes('nama') || k.includes('name'));
+      if (foundKey && cleanStudent[foundKey]) {
+        return cleanStudent[foundKey].toString().trim();
+      }
+      return "";
+    }
+
+    function extractStudentId(student) {
+      if (!student) return "";
+      let cleanStudent = {};
+      Object.keys(student).forEach(key => {
+        cleanStudent[key.toString().toLowerCase().trim()] = student[key];
+      });
+      let foundKey = Object.keys(cleanStudent).find(k => k === 'id' || k.includes('student_id') || k.includes('induk') || k.includes('qr'));
+      if (foundKey && cleanStudent[foundKey]) {
+        return cleanStudent[foundKey].toString().trim();
+      }
+      return (student.id || student.ID || "").toString().trim();
     }
 
     async function startCamera() {
@@ -142,7 +243,7 @@
         isScanningActive = true;
         requestAnimationFrame(tickScan);
       } catch (err) {
-        showScanError('Kamera tidak terdeteksi. Izinkan izin kamera di browser Anda.');
+        showScanError('Kamera tidak terdeteksi atau diblokir browser.');
       }
     }
 
@@ -187,22 +288,30 @@
       if (tab === 'scanner') startCamera(); else stopCamera();
       if (tab === 'siswa') renderStudentList();
       if (tab === 'laporan') renderReport();
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     async function handleScan(scannedData) {
       document.getElementById('scan-result').classList.add('hidden');
       document.getElementById('scan-error').classList.add('hidden');
 
-      let student = students.find(s => s.id.toLowerCase() === scannedData.toLowerCase());
-      let finalName = student ? student.name : "User Luar (Platform Lain)";
+      let student = (students && students.find) ? students.find(s => {
+        const sId = extractStudentId(s);
+        return sId.toString().toLowerCase() === scannedData.toLowerCase();
+      }) : null;
+      
+      let finalName = student ? extractStudentName(student) : "User Luar (Platform Lain)";
       let finalId = scannedData;
 
       const now = new Date();
       const dateStr = now.toLocaleDateString('en-CA');
       const timeStr = now.toTimeString().slice(0, 5);
       
-      const alreadyToday = attendanceData.find(r => r.student_id.toLowerCase() === finalId.toLowerCase() && r.date === dateStr);
+      const alreadyToday = (attendanceData && attendanceData.find) ? attendanceData.find(r => {
+        const rId = (r.student_id || r.id || r.Id || r.ID || "").toString().trim().toLowerCase();
+        return rId === finalId.toLowerCase() && r.date === dateStr;
+      }) : null;
+
       if (alreadyToday) { 
         showScanError('ID: ' + finalId + ' sudah melakukan absensi hari ini.'); 
         return; 
@@ -222,7 +331,20 @@
         
         if (resData.status === 'success') {
           document.getElementById('scan-result-text').textContent = `✓ Berhasil Absen: ${finalId} (${finalName})`;
-          await syncDataFromSpreadsheet();
+          
+          attendanceData.push({
+            student_id: finalId,
+            student_name: finalName,
+            name: finalName,
+            date: dateStr,
+            time: timeStr,
+            status: 'Hadir'
+          });
+
+          renderReport(); 
+          renderStudentList();
+          
+          setTimeout(() => { syncDataFromSpreadsheet(); }, 1500);
         } else {
           showScanError('Gagal menyimpan ke Spreadsheet.');
         }
@@ -237,15 +359,11 @@
       document.getElementById('scan-error-text').textContent = msg;
     }
 
-    // FUNGSI EDIT SISWA DI SPREADSHEET
     async function editStudent(id, currentName) {
       const newName = prompt(`Ubah nama untuk ID ${id}:`, currentName);
       if (newName === null) return;
       const trimmedName = newName.trim();
-      if (!trimmedName) {
-        alert("Nama tidak boleh kosong!");
-        return;
-      }
+      if (!trimmedName) { alert("Nama tidak boleh kosong!"); return; }
 
       try {
         const response = await fetch(SCRIPT_URL, {
@@ -256,18 +374,12 @@
         if (resData.status === 'success') {
           alert('Data nama siswa berhasil diubah!');
           await syncDataFromSpreadsheet();
-        } else {
-          alert('Gagal mengubah data di Spreadsheet.');
-        }
-      } catch (err) {
-        alert('Gagal tersambung ke server.');
-      }
+        } else { alert('Gagal mengubah data.'); }
+      } catch (err) { alert('Gagal tersambung ke server.'); }
     }
 
-    // FUNGSI HAPUS SISWA DI SPREADSHEET
     async function deleteStudent(id, name) {
-      if (!confirm(`Apakah Anda yakin ingin menghapus ${name} (ID: ${id}) dari database?`)) return;
-
+      if (!confirm(`Apakah Anda yakin ingin menghapus ${name}?`)) return;
       try {
         const response = await fetch(SCRIPT_URL, {
           method: 'POST',
@@ -275,70 +387,153 @@
         });
         const resData = await response.json();
         if (resData.status === 'success') {
-          alert('Siswa berhasil dihapus dari database!');
+          alert('Siswa berhasil dihapus!');
           await syncDataFromSpreadsheet();
-        } else {
-          alert('Gagal menghapus data di Spreadsheet.');
-        }
-      } catch (err) {
-        alert('Gagal tersambung ke server.');
-      }
+        } else { alert('Gagal menghapus data.'); }
+      } catch (err) { alert('Gagal tersambung ke server.'); }
     }
 
+    // PROSES FILTER & RENDER DATA SISWA
+    // PROSES FILTER & RENDER DATA SISWA
     function renderStudentList() {
       const container = document.getElementById('student-list');
+      const kelasFilterElement = document.getElementById('filter-kelas');
+      if (!container || !kelasFilterElement) return;
+      
+      const kelasFilter = kelasFilterElement.value.toString().replace(/\s+/g, '').trim().toLowerCase();
       container.innerHTML = '';
-      if(students.length === 0) {
-        container.innerHTML = `<p class="text-center text-gray-500 text-sm py-8 bg-white border rounded-lg shadow-sm">Belum ada siswa terdaftar di Spreadsheet.</p>`;
+      
+      // JIKA DATABASE KOSONG
+      if (!students || students.length === 0) {
+        container.innerHTML = `
+          <div class="p-4 bg-gray-50 border border-gray-200 rounded-xl text-center text-gray-500 text-sm">
+            Belum ada data siswa yang dimuat.
+          </div>`;
         return;
       }
-      students.forEach(s => {
+
+      // Filter teks murni
+      const filteredStudents = students.filter(s => {
+        if (kelasFilter === 'all') return true;
+        let studentKelas = extractStudentKelas(s).toLowerCase();
+        return studentKelas === kelasFilter;
+      });
+
+      // NOTIFIKASI MINIMALIS JIKA DATA TIDAK DITEMUKAN
+      if (filteredStudents.length === 0) {
+        container.innerHTML = `
+          <div class="py-12 text-center text-gray-400">
+            <i data-lucide="folder-open" class="w-8 h-8 mx-auto mb-2 stroke-1"></i>
+            <p class="text-sm">Tidak ada data siswa di Kelas ${kelasFilterElement.value}</p>
+          </div>`;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        return;
+      }
+
+      const printInfo = document.getElementById('print-kelas-info');
+      if (printInfo) {
+        printInfo.textContent = `Kelas: ${kelasFilter === 'all' ? 'Semua Kelas' : kelasFilterElement.value}`;
+      }
+
+      // Render elemen siswa yang lolos filter
+      filteredStudents.forEach(s => {
+        const studentKelas = extractStudentKelas(s);
+        const studentName = extractStudentName(s);
+        const studentId = extractStudentId(s);
         const div = document.createElement('div');
-        div.className = 'flex items-center gap-4 p-3 bg-white rounded-lg shadow-sm border';
+        
+        div.className = 'flex items-center gap-4 p-3 bg-white rounded-lg shadow-sm border print:shadow-none print:border-gray-300 print:break-inside-avoid';
         div.innerHTML = `
-          <canvas id="qr-${s.id}" class="w-16 h-16 bg-gray-50 p-1 rounded border"></canvas>
-          <div class="flex-1">
-            <p class="font-semibold text-sm text-gray-800">${s.name}</p>
-            <p class="text-xs text-gray-500 font-mono">ID: ${s.id}</p>
+          <canvas id="qr-${studentId}" class="w-16 h-16 bg-gray-50 p-1 rounded border border-gray-200 print:w-20 print:h-20 shrink-0"></canvas>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-sm text-gray-800 truncate print:text-base">${studentName}</p>
+            <p class="text-xs text-gray-500 font-mono truncate">ID: ${studentId}</p>
+            ${studentKelas ? `<p class="text-[10px] mt-0.5 inline-block bg-slate-100 text-slate-700 font-medium px-1.5 py-0.5 rounded print:border print:text-xs">${studentKelas}</p>` : ''}
           </div>
-          <div class="flex gap-1">
-            <button onclick="editStudent('${s.id}', '${s.name}')" class="text-blue-600 hover:bg-blue-50 p-2 rounded transition" title="Edit Nama">
-              <i data-lucide="edit-2" class="w-4 h-4"></i>
+          <div class="flex gap-1 no-print">
+            <button onclick="editStudent('${studentId}', '${studentName}')" class="text-blue-600 hover:bg-blue-50 p-2 rounded transition" title="Edit Nama">
+              <i data-lucide="pencil" class="w-4 h-4"></i>
             </button>
-            <button onclick="deleteStudent('${s.id}', '${s.name}')" class="text-red-500 hover:bg-red-50 p-2 rounded transition" title="Hapus Siswa">
+            <button onclick="deleteStudent('${studentId}', '${studentName}')" class="text-red-500 hover:bg-red-50 p-2 rounded transition" title="Hapus Siswa">
               <i data-lucide="trash-2" class="w-4 h-4"></i>
             </button>
           </div>
         `;
         container.appendChild(div);
+        
         setTimeout(() => {
-          const qrCanvas = document.getElementById('qr-' + s.id);
-          if (qrCanvas) {
-            QRCode.toCanvas(qrCanvas, s.id, { width: 64, margin: 1 });
-          }
+          const qrCanvas = document.getElementById('qr-' + studentId);
+          if (qrCanvas) { QRCode.toCanvas(qrCanvas, studentId.toString(), { width: 80, margin: 1 }); }
         }, 50);
       });
-      lucide.createIcons();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     }
+    function printQRCodeSiswa() { window.print(); }
 
     function renderReport() {
-      const d = document.getElementById('filter-date').value;
-      const filtered = attendanceData.filter(r => r.date === d);
+      const tanggalDipilih = document.getElementById('filter-date').value;
+      const kelasDipilihElement = document.getElementById('filter-laporan-kelas');
+      if (!kelasDipilihElement) return;
+
+      const kelasDipilih = kelasDipilihElement.value.toString().replace(/\s+/g, '').trim().toLowerCase();
       const body = document.getElementById('report-body');
-      const empty = document.getElementById('report-empty');
+      const emptyText = document.getElementById('report-empty');
+      
       body.innerHTML = '';
+      if (!kelasDipilih) {
+        emptyText.classList.remove('hidden');
+        emptyText.textContent = "Silahkan pilih kelas terlebih dahulu untuk menampilkan data.";
+        return;
+      }
       
-      if (filtered.length === 0) { empty.classList.remove('hidden'); return; }
-      empty.classList.add('hidden');
+      if (!attendanceData || attendanceData.length === 0) { 
+        emptyText.classList.remove('hidden'); 
+        emptyText.textContent = "Belum ada riwayat data absensi sama sekali.";
+        return; 
+      }
       
-      filtered.forEach(r => {
+      let filteredData = attendanceData.filter(r => {
+        if (!r.date) return false;
+        const rDate = r.date.toString().split('T')[0].trim();
+        return rDate.includes(tanggalDipilih) || tanggalDipilih.includes(rDate);
+      });
+      
+      filteredData = filteredData.filter(r => {
+        const rId = (r.student_id || r.id || r.Id || r.ID || "").toString().trim().toLowerCase();
+        if (!rId) return false;
+        
+        const dataSiswa = students.find(s => extractStudentId(s).toString().trim().toLowerCase() === rId);
+        const kelasSiswa = extractStudentKelas(dataSiswa).toLowerCase();
+        return kelasSiswa === kelasDipilih;
+      });
+
+      if (filteredData.length === 0) { 
+        emptyText.classList.remove('hidden'); 
+        emptyText.textContent = `Tidak ada data absensi untuk Kelas ${kelasDipilihElement.value} pada tanggal ${tanggalDipilih}.`;
+        return; 
+      }
+      
+      emptyText.classList.add('hidden');
+      
+      filteredData.forEach(r => {
+        const rId = (r.student_id || r.id || r.Id || r.ID || "-");
+        const dataSiswa = students.find(s => extractStudentId(s).toString().trim().toLowerCase() === rId.toString().trim().toLowerCase());
+        const kelasSiswa = extractStudentKelas(dataSiswa) || "-";
+        const namaSiswa = r.student_name || r.name || (dataSiswa ? extractStudentName(dataSiswa) : "Tanpa Nama");
+
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td class="p-2 border font-mono font-bold">${r.student_id}</td><td class="p-2 border">${r.student_name}</td><td class="p-2 border">${r.time}</td><td class="p-2 border"><span class="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-semibold">${r.status}</span></td>`;
+        tr.innerHTML = `
+          <td class="p-2 border font-mono font-bold">${rId}</td>
+          <td class="p-2 border">${namaSiswa}</td>
+          <td class="p-2 border"><span class="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-medium">${kelasSiswa}</span></td>
+          <td class="p-2 border">${r.time || "-"}</td>
+          <td class="p-2 border"><span class="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-semibold">${r.status || "Hadir"}</span></td>
+        `;
         body.appendChild(tr);
       });
     }
 
-    lucide.createIcons();
-  </script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script> 
  </body>
 </html>
