@@ -1,539 +1,1734 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
- <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Absensi Siswa QR Mandiri</title>
-  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght=400;500;700&amp;display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'DM Sans', sans-serif; }
-    .tab-active { border-bottom: 3px solid #1d4ed8; color: #1d4ed8; font-weight: 700; }
-    
-    @media print {
-      body * { visibility: hidden; }
-      #print-area, #print-area * { visibility: visible; }
-      #print-area { position: absolute; left: 0; top: 0; width: 100%; }
-      .no-print { display: none !important; }
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Absensi Siswa — Barcode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#1B2333;
+    --ink-soft:#242E44;
+    --paper:#F1F1EC;
+    --card:#FFFFFF;
+    --gold:#C9A227;
+    --gold-dark:#a5831c;
+    --success:#2F7A4E;
+    --success-bg:#E6F3EA;
+    --danger:#B23A32;
+    --danger-bg:#FBE9E7;
+    --warn:#C9772E;
+    --warn-bg:#FBF0E1;
+    --slate:#2A2F3A;
+    --muted:#6B7280;
+    --line:#E2E1D8;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;padding:0;background:transparent;}
+  .app-root{
+    font-family:'Inter',sans-serif;
+    color:var(--slate);
+    background:var(--paper);
+    min-height:100vh;
+    display:flex;
+    border-radius:14px;
+    overflow:hidden;
+    box-shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+
+  /* Sidebar */
+  .sidebar{
+    width:220px;
+    flex-shrink:0;
+    background:var(--ink);
+    color:#EDEEF3;
+    display:flex;
+    flex-direction:column;
+    padding:22px 14px;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:0 8px 22px 8px;
+    border-bottom:1px solid rgba(255,255,255,.1);
+    margin-bottom:16px;
+  }
+  .brand-mark{
+    width:34px;height:34px;border-radius:8px;
+    background:linear-gradient(135deg,var(--gold),#e9c65a);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--ink);
+    font-size:15px;
+  }
+  .brand-text .t1{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14.5px;line-height:1.2;}
+  .brand-text .t2{font-size:10.5px;color:#9AA3B8;letter-spacing:.04em;}
+  .nav{display:flex;flex-direction:column;gap:3px;}
+  .nav-btn{
+    display:flex;align-items:center;gap:10px;
+    background:none;border:none;color:#C4C9D6;
+    padding:10px 12px;border-radius:8px;
+    font-family:'Inter',sans-serif;font-size:13.5px;font-weight:500;
+    cursor:pointer;text-align:left;transition:background .15s, color .15s;
+  }
+  .nav-btn svg{width:16px;height:16px;flex-shrink:0;opacity:.85;}
+  .nav-btn:hover{background:rgba(255,255,255,.06);color:#fff;}
+  .nav-btn.active{background:var(--gold);color:var(--ink);font-weight:600;}
+  .nav-btn.active svg{opacity:1;}
+  .sidebar-foot{
+    margin-top:auto;padding:12px 10px 0 10px;
+    border-top:1px solid rgba(255,255,255,.1);
+    font-size:10.5px;color:#7F87A0;line-height:1.5;
+  }
+
+  /* Main */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;max-height:100vh;overflow:hidden;}
+  .topbar{
+    padding:18px 26px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--paper);
+  }
+  .topbar h1{font-family:'Space Grotesk',sans-serif;font-size:19px;margin:0;font-weight:700;}
+  .topbar .sub{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .today-chip{
+    background:var(--card);border:1px solid var(--line);border-radius:20px;
+    padding:6px 14px;font-size:12px;color:var(--muted);font-weight:500;
+  }
+  .user-chip{
+    display:flex;align-items:center;gap:9px;margin-left:12px;
+    background:var(--card);border:1px solid var(--line);border-radius:24px;padding:5px 8px 5px 5px;
+  }
+  .user-avatar{
+    width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--gold);
+    display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;
+    font-weight:700;font-size:12.5px;flex-shrink:0;
+  }
+  .user-meta{line-height:1.25;}
+  .user-meta .un{font-size:12.5px;font-weight:700;}
+  .user-meta .ur{font-size:10.5px;color:var(--muted);}
+
+  /* Login screen */
+  .login-overlay{
+    position:fixed;inset:0;z-index:200;
+    background:radial-gradient(circle at 20% 20%, #2A344D, var(--ink) 60%);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .login-box{
+    width:360px;max-width:90vw;background:#fff;border-radius:14px;padding:30px 28px;
+    box-shadow:0 25px 60px rgba(0,0,0,.35);
+  }
+  .login-box .brand-mark{margin:0 auto 14px auto;width:44px;height:44px;font-size:18px;}
+  .login-box h2{font-family:'Space Grotesk',sans-serif;text-align:center;margin:0 0 4px 0;font-size:18px;}
+  .login-box .login-sub{text-align:center;font-size:12px;color:var(--muted);margin-bottom:20px;}
+  .login-error{
+    background:var(--danger-bg);color:var(--danger);font-size:12px;padding:8px 10px;
+    border-radius:7px;margin-bottom:12px;display:none;
+  }
+  .login-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.5;}
+  .content{flex:1;overflow-y:auto;padding:24px 26px 40px 26px;}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  /* Cards / stats */
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+  .stat-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;position:relative;overflow:hidden;
+  }
+  .stat-card .label{font-size:11.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  .stat-card .num{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;margin-top:6px;}
+  .stat-card .bar{position:absolute;left:0;top:0;bottom:0;width:4px;}
+  .stat-card.c-total .bar{background:var(--ink);}
+  .stat-card.c-hadir .bar{background:var(--success);}
+  .stat-card.c-terlambat .bar{background:var(--warn);}
+  .stat-card.c-belum .bar{background:var(--danger);}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:18px;}
+  .panel h2{font-family:'Space Grotesk',sans-serif;font-size:15px;margin:0 0 14px 0;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .panel h2 .tag{font-size:10px;background:var(--paper);color:var(--muted);padding:2px 8px;border-radius:10px;font-family:'Inter';font-weight:600;}
+
+  /* Buttons */
+  .btn{
+    font-family:'Inter',sans-serif;font-size:13px;font-weight:600;
+    padding:9px 15px;border-radius:8px;border:1px solid transparent;
+    cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:filter .15s, background .15s;
+  }
+  .btn svg{width:14px;height:14px;}
+  .btn-primary{background:var(--ink);color:#fff;}
+  .btn-primary:hover{filter:brightness(1.15);}
+  .btn-gold{background:var(--gold);color:var(--ink);}
+  .btn-gold:hover{background:var(--gold-dark);}
+  .btn-ghost{background:transparent;color:var(--slate);border-color:var(--line);}
+  .btn-ghost:hover{background:var(--paper);}
+  .btn-danger{background:var(--danger-bg);color:var(--danger);}
+  .btn-danger:hover{filter:brightness(.96);}
+  .btn-sm{padding:6px 10px;font-size:12px;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+
+  /* Forms */
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;}
+  .field input, .field select{
+    width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;
+    font-family:'Inter',sans-serif;font-size:13.5px;background:#fff;color:var(--slate);
+  }
+  .field input:focus, .field select:focus{outline:2px solid var(--gold);outline-offset:-1px;border-color:var(--gold);}
+  .row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+  /* Table */
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{
+    text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.03em;
+    color:var(--muted);font-weight:700;padding:9px 10px;border-bottom:1px solid var(--line);
+  }
+  tbody td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  tbody tr:hover{background:#FAFAF6;}
+  .toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+  .toolbar-left{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .search-input{
+    padding:8px 12px;border:1px solid var(--line);border-radius:7px;font-size:13px;width:220px;
+    font-family:'Inter';background:#fff;
+  }
+  .search-input:focus{outline:2px solid var(--gold);outline-offset:-1px;}
+
+  .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600;}
+  .badge-hadir{background:var(--success-bg);color:var(--success);}
+  .badge-terlambat{background:var(--warn-bg);color:var(--warn);}
+  .badge-alpha{background:var(--danger-bg);color:var(--danger);}
+  .badge-izin, .badge-sakit{background:#EAEAF2;color:#4C4F6B;}
+  .badge-belum{background:#EFEFEA;color:var(--muted);}
+
+  .empty-state{text-align:center;padding:40px 20px;color:var(--muted);}
+  .empty-state svg{width:36px;height:36px;opacity:.35;margin-bottom:10px;}
+  .empty-state p{font-size:13px;margin:0;}
+
+  /* Modal */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(20,22,30,.55);
+    display:flex;align-items:center;justify-content:center;z-index:50;
+    animation:fadeIn .15s ease;
+  }
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .modal{background:#fff;border-radius:12px;width:420px;max-width:92vw;max-height:88vh;overflow-y:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.25);}
+  .modal h3{font-family:'Space Grotesk',sans-serif;margin:0 0 16px 0;font-size:16px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}
+
+  /* Absensi / scan view */
+  .scan-layout{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start;}
+  .scan-box{
+    background:var(--ink);border-radius:var(--radius);padding:20px;color:#fff;
+  }
+  .scan-box h2{color:#fff;}
+  .scan-input-wrap{position:relative;margin-bottom:12px;}
+  .scan-input{
+    width:100%;padding:13px 14px;border-radius:8px;border:2px dashed rgba(255,255,255,.25);
+    background:rgba(255,255,255,.06);color:#fff;font-family:'JetBrains Mono',monospace;font-size:14px;
+  }
+  .scan-input::placeholder{color:#8890A5;}
+  .scan-input:focus{outline:none;border-color:var(--gold);background:rgba(255,255,255,.1);}
+  .scan-hint{font-size:11.5px;color:#9AA3B8;margin-top:8px;line-height:1.5;}
+  #cam-region{width:100%;border-radius:8px;overflow:hidden;margin-top:10px;}
+  .last-flash{
+    margin-top:14px;padding:14px;border-radius:9px;background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.1);min-height:64px;
+  }
+  .last-flash.ok{background:rgba(47,122,78,.25);border-color:rgba(47,122,78,.5);}
+  .last-flash.bad{background:rgba(178,58,50,.25);border-color:rgba(178,58,50,.5);}
+  .last-flash .nm{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14.5px;}
+  .last-flash .meta{font-size:11.5px;color:#C4C9D6;margin-top:3px;}
+
+  .feed-item{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);font-size:13px;}
+  .feed-item:last-child{border-bottom:none;}
+  .feed-avatar{
+    width:30px;height:30px;border-radius:50%;background:var(--paper);
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0;
+  }
+  .feed-time{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);}
+
+  select.status-select{
+    padding:5px 8px;border-radius:6px;border:1px solid var(--line);font-size:12px;font-family:'Inter';
+  }
+
+  /* Kartu / print */
+  .card-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  .id-card{
+    border:1px dashed #C7C6BA;border-radius:10px;padding:14px;background:#fff;
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+  }
+  .id-card .school{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+  .id-card .nm{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;text-align:center;}
+  .id-card .kl{font-size:11.5px;color:var(--muted);}
+  .id-card svg{max-width:100%;}
+  .id-card .nis{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);}
+
+  /* Toast */
+  #toast-root{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:80;}
+  .toast{
+    background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;
+    box-shadow:0 6px 18px rgba(0,0,0,.2);animation:toastIn .18s ease;display:flex;align-items:center;gap:8px;
+  }
+  .toast.ok{background:var(--success);}
+  .toast.bad{background:var(--danger);}
+  @keyframes toastIn{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+  .kelas-pill{
+    font-size:11px;font-weight:600;background:var(--paper);color:var(--slate);
+    padding:3px 9px;border-radius:20px;border:1px solid var(--line);
+  }
+
+  .excel-status-box{
+    font-size:12.5px;color:var(--muted);background:var(--paper);border:1px solid var(--line);
+    border-radius:8px;padding:10px 12px;margin-bottom:12px;line-height:1.5;
+  }
+
+  @media print{
+    body *{visibility:hidden;}
+    #print-area, #print-area *{visibility:visible;}
+    #print-area{position:absolute;left:0;top:0;width:100%;}
+  }
+
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#D6D5C9;border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="app-root" style="display:none;">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div class="brand-text">
+        <div class="t1">Absensi Siswa</div>
+        <div class="t2">SISTEM BARCODE</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <button class="nav-btn active" data-view="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-btn" data-view="siswa">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.8 14.2c2.4.3 4.2 2.3 4.2 5"/></svg>
+        Data Siswa
+      </button>
+      <button class="nav-btn" data-view="absensi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h2M4 9h2M4 13h2M4 17h2"/><path d="M9 5h1M9 9h1.5M9 13h1M9 17h1.5"/><path d="M13 5h2M13 9h1M13 13h2M13 17h1"/><path d="M18 5h2v14h-2z"/></svg>
+        Absensi / Scan
+      </button>
+      <button class="nav-btn" data-view="laporan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 13h6M9 17h6M9 9h2"/></svg>
+        Laporan
+      </button>
+      <button class="nav-btn" data-view="kartu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 14h4"/></svg>
+        Cetak Kartu
+      </button>
+      <button class="nav-btn" data-view="user" id="nav-user-btn" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7.5" r="3.2"/><path d="M5 20c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5"/><path d="M18 4.5l1.6 1.6L23 2.5"/></svg>
+        Kelola User
+      </button>
+      <button class="nav-btn" data-view="pengaturan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
+        Pengaturan
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      Data tersimpan otomatis di penyimpanan artifact ini.<br>
+      <span id="side-count-students">0</span> siswa terdaftar.
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="page-title">Dashboard</h1>
+        <div class="sub" id="page-sub">Ringkasan kehadiran hari ini</div>
+      </div>
+      <div class="today-chip" id="today-chip">—</div>
+      <div class="user-chip" id="user-chip">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-meta">
+          <div class="un" id="user-chip-name">-</div>
+          <div class="ur" id="user-chip-role">-</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btn-logout" title="Keluar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <section class="view active" id="view-dashboard">
+        <div class="stat-grid">
+          <div class="stat-card c-total"><div class="bar"></div><div class="label">Total Siswa</div><div class="num" id="stat-total">0</div></div>
+          <div class="stat-card c-hadir"><div class="bar"></div><div class="label">Hadir Hari Ini</div><div class="num" id="stat-hadir">0</div></div>
+          <div class="stat-card c-terlambat"><div class="bar"></div><div class="label">Terlambat</div><div class="num" id="stat-terlambat">0</div></div>
+          <div class="stat-card c-belum"><div class="bar"></div><div class="label">Belum Absen</div><div class="num" id="stat-belum">0</div></div>
+        </div>
+
+        <div class="panel">
+          <h2>Aktivitas Scan Terbaru <span class="tag">hari ini</span></h2>
+          <div id="dash-feed"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Rekap per Kelas <span class="tag">hari ini</span></h2>
+          <table>
+            <thead><tr><th>Kelas</th><th>Jumlah Siswa</th><th>Hadir</th><th>Terlambat</th><th>Belum Absen</th></tr></thead>
+            <tbody id="dash-kelas-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- DATA SISWA -->
+      <section class="view" id="view-siswa">
+        <div class="panel">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <input class="search-input" id="siswa-search" placeholder="Cari nama / NIS...">
+              <select class="search-input" id="siswa-filter-kelas" style="width:140px;"><option value="">Semua Kelas</option></select>
+            </div>
+            <div class="toolbar-left">
+              <input type="file" id="siswa-import-file" accept=".xlsx,.xls" style="display:none;">
+              <button class="btn btn-ghost" id="btn-template-excel">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 13h6M9 17h6"/></svg>
+                Unduh Template
+              </button>
+              <button class="btn btn-ghost" id="btn-import-siswa">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
+                Impor Excel
+              </button>
+              <button class="btn btn-ghost" id="btn-export-siswa">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 21h16"/></svg>
+                Ekspor Excel
+              </button>
+              <button class="btn btn-gold" id="btn-add-siswa">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+                Tambah Siswa
+              </button>
+            </div>
+          </div>
+          <div class="scan-hint" style="margin-bottom:14px;color:var(--muted);">Kolom yang dibaca saat impor: <strong>NIS, Nama, Kelas, JK</strong>. Siswa dengan NIS yang sama akan diperbarui, NIS baru akan ditambahkan.</div>
+          <table>
+            <thead><tr><th>Barcode</th><th>NIS</th><th>Nama</th><th>Kelas</th><th>JK</th><th style="text-align:right;">Aksi</th></tr></thead>
+            <tbody id="siswa-table"></tbody>
+          </table>
+          <div class="empty-state" id="siswa-empty" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6"/></svg>
+            <p>Belum ada data siswa. Klik "Tambah Siswa" untuk mulai.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABSENSI -->
+      <section class="view" id="view-absensi">
+        <div class="scan-layout">
+          <div class="scan-box">
+            <h2>Pindai Barcode</h2>
+            <div class="scan-input-wrap">
+              <input class="scan-input mono" id="scan-input" placeholder="Arahkan scanner / ketik NIS lalu Enter" autocomplete="off">
+            </div>
+            <button class="btn btn-ghost" id="btn-toggle-cam" style="width:100%;justify-content:center;background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.2);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+              Gunakan Kamera
+            </button>
+            <div id="cam-region"></div>
+            <div class="scan-hint">Scanner USB/Bluetooth akan mengetik otomatis + Enter. Status "Hadir" atau "Terlambat" ditentukan dari jam masuk di Pengaturan.</div>
+            <div class="last-flash" id="last-flash">
+              <div class="meta">Menunggu pindaian pertama...</div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin:0;">
+            <div class="toolbar">
+              <h2 style="margin:0;">Daftar Hadir Hari Ini</h2>
+              <div class="toolbar-left">
+                <select class="search-input" id="absensi-filter-kelas" style="width:150px;"><option value="">Semua Kelas</option></select>
+              </div>
+            </div>
+            <table>
+              <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Waktu</th><th>Status</th></tr></thead>
+              <tbody id="absensi-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- LAPORAN -->
+      <section class="view" id="view-laporan">
+        <div class="panel">
+          <h2>Filter Laporan</h2>
+          <div class="row-2">
+            <div class="field"><label>Dari Tanggal</label><input type="date" id="lap-dari"></div>
+            <div class="field"><label>Sampai Tanggal</label><input type="date" id="lap-sampai"></div>
+          </div>
+          <div class="row-2">
+            <div class="field"><label>Kelas</label><select id="lap-kelas"><option value="">Semua Kelas</option></select></div>
+            <div class="field"><label>Siswa</label><select id="lap-siswa"><option value="">Semua Siswa</option></select></div>
+          </div>
+          <div class="toolbar-left" style="margin-top:6px;">
+            <button class="btn btn-primary" id="btn-terapkan-filter">Terapkan Filter</button>
+            <button class="btn btn-gold" id="btn-export-excel">Ekspor Excel</button>
+            <button class="btn btn-ghost" id="btn-export-csv">Ekspor CSV</button>
+            <button class="btn btn-ghost" id="btn-print-laporan">Cetak</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Rekap Per Siswa</h2>
+          <table>
+            <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Hadir</th><th>Terlambat</th><th>Izin</th><th>Sakit</th><th>Alpha</th><th>% Kehadiran</th></tr></thead>
+            <tbody id="lap-rekap-table"></tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <h2>Detail Catatan</h2>
+          <table>
+            <thead><tr><th>Tanggal</th><th>NIS</th><th>Nama</th><th>Kelas</th><th>Waktu</th><th>Status</th></tr></thead>
+            <tbody id="lap-detail-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- KARTU -->
+      <section class="view" id="view-kartu">
+        <div class="panel">
+          <div class="toolbar">
+            <h2 style="margin:0;">Cetak Kartu Barcode Siswa</h2>
+            <div class="toolbar-left">
+              <select class="search-input" id="kartu-filter-kelas" style="width:150px;"><option value="">Semua Kelas</option></select>
+              <button class="btn btn-gold" id="btn-print-kartu">Cetak Kartu</button>
+            </div>
+          </div>
+          <div class="card-grid" id="kartu-grid"></div>
+        </div>
+      </section>
+
+      <!-- KELOLA USER -->
+      <section class="view" id="view-user">
+        <div class="panel">
+          <div class="toolbar">
+            <h2 style="margin:0;">Kelola User</h2>
+            <button class="btn btn-gold" id="btn-add-user">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+              Tambah User
+            </button>
+          </div>
+          <table>
+            <thead><tr><th>Username</th><th>Nama</th><th>Role</th><th style="text-align:right;">Aksi</th></tr></thead>
+            <tbody id="user-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- PENGATURAN -->
+      <section class="view" id="view-pengaturan">
+        <div class="panel" style="max-width:420px;">
+          <h2>Akun Saya</h2>
+          <div class="field"><label>Nama Tampilan</label><input id="me-nama"></div>
+          <div class="field"><label>Username</label><input id="me-username"></div>
+          <div class="row-2">
+            <div class="field"><label>Password Baru</label><input type="password" id="me-password" placeholder="Kosongkan jika tidak ganti"></div>
+            <div class="field"><label>Ulangi Password</label><input type="password" id="me-password2"></div>
+          </div>
+          <button class="btn btn-primary" id="btn-simpan-akun">Simpan Akun</button>
+        </div>
+
+        <div class="panel" style="max-width:420px;">
+          <h2>Database Excel <span class="tag">opsional</span></h2>
+          <div class="excel-status-box" id="excel-db-status">Memeriksa dukungan browser...</div>
+          <div class="toolbar-left" style="margin-bottom:4px;">
+            <button class="btn btn-primary btn-sm" id="btn-excel-new">Buat File Baru</button>
+            <button class="btn btn-ghost btn-sm" id="btn-excel-open">Buka File Excel</button>
+            <button class="btn btn-gold btn-sm" id="btn-excel-reconnect" style="display:none;">Sambungkan Ulang</button>
+            <button class="btn btn-danger btn-sm" id="btn-excel-disconnect" style="display:none;">Putuskan Koneksi</button>
+          </div>
+          <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0 0;line-height:1.5;">Jika terhubung, data siswa, absensi, user, dan pengaturan otomatis disimpan langsung ke file .xlsx tersebut setiap ada perubahan. Butuh Chrome/Edge versi terbaru.</p>
+        </div>
+
+        <div class="panel" style="max-width:420px;">
+          <h2>Pengaturan Jam Kehadiran</h2>
+          <div class="field"><label>Nama Sekolah</label><input id="set-nama-sekolah"></div>
+          <div class="field"><label>Jam Masuk</label><input type="time" id="set-jam-masuk"></div>
+          <div class="field"><label>Batas Terlambat</label><input type="time" id="set-batas-terlambat"></div>
+          <button class="btn btn-primary" id="btn-simpan-pengaturan">Simpan Pengaturan</button>
+        </div>
+        <div class="panel" style="max-width:420px;">
+          <h2>Reset Data</h2>
+          <p style="font-size:12.5px;color:var(--muted);margin-top:-6px;">Menghapus seluruh data siswa dan riwayat absensi secara permanen.</p>
+          <button class="btn btn-danger" id="btn-reset-data">Hapus Semua Data</button>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<div id="login-overlay" class="login-overlay">
+  <div class="login-box">
+    <div class="brand-mark">A</div>
+    <h2>Masuk ke Sistem</h2>
+    <div class="login-sub">Absensi Siswa — Sistem Barcode</div>
+    <div class="login-error" id="login-error"></div>
+    <div class="field"><label>Username</label><input id="login-username" autocomplete="username"></div>
+    <div class="field"><label>Password</label><input type="password" id="login-password" autocomplete="current-password"></div>
+    <button class="btn btn-gold" id="btn-login" style="width:100%;justify-content:center;">Masuk</button>
+    <div class="login-hint">Akun default: <strong>admin</strong> / <strong>admin123</strong><br>Segera ganti password di menu Pengaturan setelah masuk.</div>
+  </div>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+<div id="print-area"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const STORAGE_KEY = "absensi-app-data";
+  const SESSION_KEY = "absensi-session";
+
+  /* Lapisan penyimpanan: pakai window.storage jika tersedia (mis. saat pratinjau
+     di Claude.ai), jika tidak (file dibuka langsung di browser / desktop) pakai
+     localStorage sebagai cadangan supaya data tetap tersimpan di perangkat ini. */
+  const Store = {
+    hasCloud(){ return typeof window.storage !== "undefined" && window.storage && typeof window.storage.set === "function"; },
+    async get(key){
+      if(this.hasCloud()){
+        try{ return await window.storage.get(key, false); }
+        catch(e){ return null; }
+      }
+      const raw = localStorage.getItem(key);
+      return raw === null ? null : { key, value: raw, shared:false };
+    },
+    async set(key, value){
+      if(this.hasCloud()){
+        try{ return await window.storage.set(key, value, false); }
+        catch(e){ console.error(e); return null; }
+      }
+      try{ localStorage.setItem(key, value); return { key, value, shared:false }; }
+      catch(e){ console.error(e); return null; }
+    },
+    async delete(key){
+      if(this.hasCloud()){
+        try{ return await window.storage.delete(key, false); }
+        catch(e){ return null; }
+      }
+      localStorage.removeItem(key);
+      return { key, deleted:true, shared:false };
     }
-  </style>
- </head>
- <body class="min-h-screen bg-gray-50">
-  
-  <header class="bg-white p-4 shadow-sm border-b text-center no-print">
-   <h1 class="text-xl font-bold text-blue-600">Absensi QR Universal</h1>
-   <p class="text-xs text-gray-500">Manajemen Data &amp; Sinkronisasi Spreadsheet</p>
-  </header>
-  
-  <nav class="flex border-b bg-white sticky top-0 z-10 no-print">
-   <button id="tab-scanner" class="flex-1 py-3 text-center tab-active" onclick="switchTab('scanner')">
-     <i data-lucide="scan" class="inline w-4 h-4 mr-1"></i>Scanner
-   </button> 
-   <button id="tab-siswa" class="flex-1 py-3 text-center text-gray-600" onclick="switchTab('siswa')">
-     <i data-lucide="users" class="inline w-4 h-4 mr-1"></i>Siswa
-   </button> 
-   <button id="tab-laporan" class="flex-1 py-3 text-center text-gray-600" onclick="switchTab('laporan')">
-     <i data-lucide="file-text" class="inline w-4 h-4 mr-1"></i>Laporan
-   </button>
-  </nav>
+  };
+  let DB = {
+    students: [],
+    attendance: [],
+    users: [],
+    settings: { namaSekolah: "SMA Negeri Harapan", jamMasuk: "07:00", batasTerlambat: "07:15" }
+  };
+  let saveTimer = null;
+  let html5Qr = null;
+  let camActive = false;
+  let currentUser = null;
+  let excelHandle = null;
+  let pendingExcelHandle = null;
+  let excelWriteTimer = null;
 
-  <main class="max-w-2xl mx-auto p-4">
-   
-   <section id="panel-scanner" class="no-print">
-    <p class="text-center text-gray-600 mb-4 text-sm">Arahkan kamera ke QR Code berisi ID atau Nama Siswa</p>
-    
-    <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-4 text-center overflow-hidden">
-     <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-3">
-       <video id="webcam-video" playsinline autoplay class="w-full h-full object-cover"></video>
-       <div class="absolute inset-0 border-4 border-dashed border-white/40 pointer-events-none flex items-center justify-center">
-         <div class="w-44 h-44 border-4 border-blue-500 rounded-lg opacity-70 animate-pulse"></div>
-       </div>
-     </div>
-     
-     <div class="flex gap-2">
-       <button type="button" onclick="startCamera()" class="flex-1 py-2 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 text-sm shadow">
-         <i data-lucide="video" class="inline w-4 h-4 mr-1"></i>Aktifkan Kamera
-       </button>
-       <button type="button" onclick="stopCamera()" class="flex-1 py-2 rounded-lg font-semibold text-white bg-gray-600 hover:bg-gray-700 text-sm shadow">
-         <i data-lucide="video-off" class="inline w-4 h-4 mr-1"></i>Matikan Kamera
-       </button>
-     </div>
-    </div>
-    
-    <div id="scan-result" class="mt-4 hidden p-4 rounded-lg bg-green-50 border border-green-200 text-center animate-bounce">
-     <p id="scan-result-text" class="text-green-800 font-bold text-lg"></p>
-    </div>
-    <div id="scan-error" class="mt-4 hidden p-4 rounded-lg bg-red-50 border border-red-200 text-center">
-     <p id="scan-error-text" class="text-red-800 font-semibold"></p>
-    </div>
-   </section>
+  function todayISO(){
+    const d = new Date();
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  }
+  function nowTime(){
+    const d = new Date();
+    return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");
+  }
+  function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+  function fmtTanggal(iso){
+    if(!iso) return "-";
+    const [y,m,d] = iso.split("-");
+    const bulan = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+    return d+" "+bulan[parseInt(m,10)-1]+" "+y;
+  }
+  function hashPass(pw){
+    try{ return btoa(unescape(encodeURIComponent(String(pw)))); }catch(e){ return String(pw); }
+  }
 
-   <section id="panel-siswa" class="hidden">
-    <div class="bg-white p-3 rounded-lg border shadow-sm mb-4 no-print">
-      <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-        <h3 class="font-bold text-gray-800 text-sm flex items-center gap-2">
-          <i data-lucide="database" class="w-4 h-4 text-blue-600"></i> Data Terdaftar di Spreadsheet
-        </h3>
-        <div class="flex items-center gap-2">
-          <button onclick="syncDataFromSpreadsheet()" class="text-xs font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
-            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Sync Data
-          </button>
-          <button onclick="printQRCodeSiswa()" class="text-xs font-semibold bg-green-600 text-white hover:bg-green-700 px-3 py-1.5 rounded-lg flex items-center gap-1 transition shadow">
-            <i data-lucide="printer" class="w-3 h-3"></i> Cetak QR
-          </button>
+  /* ---------- IndexedDB: simpan referensi file Excel supaya bisa otomatis
+     tersambung lagi tiap kali aplikasi dibuka, tanpa perlu pilih file ulang ---------- */
+  const FileDB = {
+    _dbp: null,
+    open(){
+      if(this._dbp) return this._dbp;
+      this._dbp = new Promise((resolve,reject)=>{
+        const req = indexedDB.open("absensi-filehandle-db", 1);
+        req.onupgradeneeded = ()=>{ req.result.createObjectStore("handles"); };
+        req.onsuccess = ()=>resolve(req.result);
+        req.onerror = ()=>reject(req.error);
+      });
+      return this._dbp;
+    },
+    async setHandle(handle){
+      const db = await this.open();
+      return new Promise((resolve,reject)=>{
+        const tx = db.transaction("handles","readwrite");
+        tx.objectStore("handles").put(handle,"dbFile");
+        tx.oncomplete = ()=>resolve();
+        tx.onerror = ()=>reject(tx.error);
+      });
+    },
+    async getHandle(){
+      const db = await this.open();
+      return new Promise((resolve,reject)=>{
+        const tx = db.transaction("handles","readonly");
+        const req = tx.objectStore("handles").get("dbFile");
+        req.onsuccess = ()=>resolve(req.result || null);
+        req.onerror = ()=>reject(req.error);
+      });
+    },
+    async clearHandle(){
+      const db = await this.open();
+      return new Promise((resolve,reject)=>{
+        const tx = db.transaction("handles","readwrite");
+        tx.objectStore("handles").delete("dbFile");
+        tx.oncomplete = ()=>resolve();
+        tx.onerror = ()=>reject(tx.error);
+      });
+    }
+  };
+
+  /* ---------- ExcelDB: file .xlsx sebagai database utama ---------- */
+  function excelSupported(){ return typeof window.showSaveFilePicker === "function"; }
+
+  function buildWorkbookFromDB(){
+    const wb = XLSX.utils.book_new();
+    const wsSiswa = XLSX.utils.json_to_sheet(DB.students.map(s=>({ ID:s.id, NIS:s.nis, Nama:s.nama, Kelas:s.kelas||"", JK:s.jk||"" })));
+    XLSX.utils.book_append_sheet(wb, wsSiswa, "Siswa");
+    const wsAbsensi = XLSX.utils.json_to_sheet(DB.attendance.map(a=>({ ID:a.id, StudentID:a.studentId, Tanggal:a.tanggal, Waktu:a.waktu, Status:a.status })));
+    XLSX.utils.book_append_sheet(wb, wsAbsensi, "Absensi");
+    const wsUsers = XLSX.utils.json_to_sheet(DB.users.map(u=>({ ID:u.id, Username:u.username, Nama:u.nama, Role:u.role, PasswordHash:u.password })));
+    XLSX.utils.book_append_sheet(wb, wsUsers, "Users");
+    const wsSettings = XLSX.utils.json_to_sheet([
+      { Key:"namaSekolah", Value:DB.settings.namaSekolah },
+      { Key:"jamMasuk", Value:DB.settings.jamMasuk },
+      { Key:"batasTerlambat", Value:DB.settings.batasTerlambat }
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsSettings, "Pengaturan");
+    return wb;
+  }
+
+  function loadDBFromWorkbook(wb){
+    const getSheet = (name)=> wb.Sheets[name] ? XLSX.utils.sheet_to_json(wb.Sheets[name], { defval:"" }) : [];
+    DB.students = getSheet("Siswa").map(r=>({
+      id: String(r.ID || uid()), nis:String(r.NIS||"").trim(), nama:String(r.Nama||"").trim(),
+      kelas:String(r.Kelas||"").trim(), jk:String(r.JK||"").trim()
+    })).filter(s=>s.nis && s.nama);
+    DB.attendance = getSheet("Absensi").map(r=>({
+      id:String(r.ID || uid()), studentId:String(r.StudentID||""), tanggal:String(r.Tanggal||""),
+      waktu:String(r.Waktu||""), status:String(r.Status||"")
+    })).filter(a=>a.studentId && a.tanggal);
+    DB.users = getSheet("Users").map(r=>({
+      id:String(r.ID || uid()), username:String(r.Username||"").trim(), nama:String(r.Nama||"").trim(),
+      role:String(r.Role||"Operator").trim() || "Operator", password:String(r.PasswordHash||"")
+    })).filter(u=>u.username);
+    getSheet("Pengaturan").forEach(r=>{
+      const key = String(r.Key||"").trim();
+      if(key && Object.prototype.hasOwnProperty.call(DB.settings, key)) DB.settings[key] = String(r.Value ?? "");
+    });
+  }
+
+  async function writeExcelFile(){
+    if(!excelHandle) return;
+    try{
+      const wb = buildWorkbookFromDB();
+      const buf = XLSX.write(wb, { type:"array", bookType:"xlsx" });
+      const writable = await excelHandle.createWritable();
+      await writable.write(buf);
+      await writable.close();
+    }catch(e){
+      console.error("Gagal menulis ke file Excel", e);
+      toast("Gagal menyimpan ke file Excel","bad");
+    }
+  }
+  function scheduleExcelWrite(){
+    clearTimeout(excelWriteTimer);
+    excelWriteTimer = setTimeout(writeExcelFile, 400);
+  }
+
+  async function connectNewExcel(){
+    if(!excelSupported()){ toast("Browser ini tidak mendukung koneksi file Excel langsung","bad"); return; }
+    try{
+      const handle = await window.showSaveFilePicker({
+        suggestedName: "database-absensi.xlsx",
+        types: [{ description:"Excel Workbook", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }]
+      });
+      excelHandle = handle;
+      pendingExcelHandle = null;
+      await FileDB.setHandle(handle).catch(()=>{});
+      if(DB.users.length === 0){
+        DB.users.push({ id:uid(), username:"admin", password:hashPass("admin123"), nama:"Administrator", role:"Admin" });
+      }
+      await writeExcelFile();
+      updateExcelStatus();
+      toast("File Excel baru dibuat dan terhubung sebagai database","ok");
+    }catch(e){ if(e.name !== "AbortError"){ console.error(e); toast("Gagal membuat file Excel","bad"); } }
+  }
+
+  async function connectExistingExcel(){
+    if(!excelSupported()){ toast("Browser ini tidak mendukung koneksi file Excel langsung","bad"); return; }
+    try{
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description:"Excel Workbook", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }],
+        multiple:false
+      });
+      const perm = await handle.requestPermission({ mode:"readwrite" });
+      if(perm !== "granted"){ toast("Izin akses file ditolak","bad"); return; }
+      const file = await handle.getFile();
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type:"array" });
+      loadDBFromWorkbook(wb);
+      if(DB.users.length === 0){
+        DB.users.push({ id:uid(), username:"admin", password:hashPass("admin123"), nama:"Administrator", role:"Admin" });
+      }
+      excelHandle = handle;
+      pendingExcelHandle = null;
+      await FileDB.setHandle(handle).catch(()=>{});
+      saveData();
+      renderAll();
+      updateExcelStatus();
+      toast("Database Excel terhubung","ok");
+    }catch(e){ if(e.name !== "AbortError"){ console.error(e); toast("Gagal membuka file Excel","bad"); } }
+  }
+
+  async function disconnectExcel(){
+    excelHandle = null;
+    pendingExcelHandle = null;
+    await FileDB.clearHandle().catch(()=>{});
+    updateExcelStatus();
+    toast("Koneksi database Excel diputus, kembali memakai penyimpanan browser","ok");
+  }
+
+  async function reconnectPendingExcel(){
+    if(!pendingExcelHandle) return;
+    try{
+      const perm = await pendingExcelHandle.requestPermission({ mode:"readwrite" });
+      if(perm !== "granted"){ toast("Izin akses file ditolak","bad"); return; }
+      const file = await pendingExcelHandle.getFile();
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type:"array" });
+      loadDBFromWorkbook(wb);
+      excelHandle = pendingExcelHandle;
+      pendingExcelHandle = null;
+      saveData(); renderAll(); updateExcelStatus();
+      toast("Berhasil tersambung kembali ke file Excel","ok");
+    }catch(e){ console.error(e); toast("Gagal menyambungkan ulang","bad"); }
+  }
+
+  async function tryAutoReconnectExcel(){
+    if(!excelSupported()) return;
+    try{
+      const handle = await FileDB.getHandle();
+      if(!handle) return;
+      const perm = await handle.queryPermission({ mode:"readwrite" });
+      if(perm === "granted"){
+        const file = await handle.getFile();
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type:"array" });
+        loadDBFromWorkbook(wb);
+        excelHandle = handle;
+      } else {
+        pendingExcelHandle = handle;
+      }
+    }catch(e){ console.warn("Auto-sambung file Excel gagal", e); }
+  }
+
+  function updateExcelStatus(){
+    const el = document.getElementById("excel-db-status");
+    const btnNew = document.getElementById("btn-excel-new");
+    const btnOpen = document.getElementById("btn-excel-open");
+    const btnReconnect = document.getElementById("btn-excel-reconnect");
+    const btnDisconnect = document.getElementById("btn-excel-disconnect");
+    if(!el) return;
+    if(!excelSupported()){
+      el.textContent = "Browser ini tidak mendukung koneksi file Excel langsung (pakai Chrome/Edge versi terbaru). Data disimpan di penyimpanan browser, gunakan tombol Impor/Ekspor Excel di Data Siswa & Laporan sebagai gantinya.";
+      [btnNew,btnOpen,btnReconnect,btnDisconnect].forEach(b=>{ if(b) b.style.display="none"; });
+      return;
+    }
+    if(excelHandle){
+      el.textContent = "✓ Terhubung ke file: " + (excelHandle.name || "database-absensi.xlsx") + ". Setiap perubahan otomatis tersimpan ke file ini.";
+      btnNew.style.display="none"; btnOpen.style.display="none";
+      btnReconnect.style.display="none"; btnDisconnect.style.display="inline-flex";
+    } else if(pendingExcelHandle){
+      el.textContent = "Sebelumnya terhubung ke \"" + (pendingExcelHandle.name||"file Excel") + "\" — klik Sambungkan Ulang untuk memberi izin akses kembali.";
+      btnNew.style.display="inline-flex"; btnOpen.style.display="inline-flex";
+      btnReconnect.style.display="inline-flex"; btnDisconnect.style.display="none";
+    } else {
+      el.textContent = "Belum terhubung ke file Excel. Data saat ini disimpan di penyimpanan browser.";
+      btnNew.style.display="inline-flex"; btnOpen.style.display="inline-flex";
+      btnReconnect.style.display="none"; btnDisconnect.style.display="none";
+    }
+  }
+
+  document.getElementById("btn-excel-new").addEventListener("click", connectNewExcel);
+  document.getElementById("btn-excel-open").addEventListener("click", connectExistingExcel);
+  document.getElementById("btn-excel-reconnect").addEventListener("click", reconnectPendingExcel);
+  document.getElementById("btn-excel-disconnect").addEventListener("click", disconnectExcel);
+
+  async function loadData(){
+    try{
+      const res = await Store.get(STORAGE_KEY);
+      if(res && res.value){
+        const parsed = JSON.parse(res.value);
+        DB.students = parsed.students || [];
+        DB.attendance = parsed.attendance || [];
+        DB.users = parsed.users || [];
+        DB.settings = Object.assign(DB.settings, parsed.settings || {});
+      }
+    }catch(e){
+      console.log("Belum ada data tersimpan, memulai baru.", e);
+    }
+    await tryAutoReconnectExcel();
+    if(DB.users.length === 0){
+      DB.users.push({ id: uid(), username:"admin", password: hashPass("admin123"), nama:"Administrator", role:"Admin" });
+      saveData();
+    }
+    updateExcelStatus();
+    await restoreSession();
+    renderAll();
+  }
+
+  function saveData(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async ()=>{
+      try{
+        await Store.set(STORAGE_KEY, JSON.stringify(DB));
+      }catch(e){
+        toast("Gagal menyimpan data", "bad");
+        console.error(e);
+      }
+    }, 200);
+    if(excelHandle) scheduleExcelWrite();
+  }
+
+  async function restoreSession(){
+    try{
+      const res = await Store.get(SESSION_KEY);
+      if(res && res.value){
+        const { username } = JSON.parse(res.value);
+        const user = DB.users.find(u=>u.username===username);
+        if(user){ loginSuccess(user); return; }
+      }
+    }catch(e){ /* belum ada sesi */ }
+    showLogin();
+  }
+
+  function showLogin(){
+    document.getElementById("login-overlay").style.display = "flex";
+    document.querySelector(".app-root").style.display = "none";
+    setTimeout(()=>document.getElementById("login-username").focus(), 50);
+  }
+
+  function loginSuccess(user){
+    currentUser = user;
+    document.getElementById("login-overlay").style.display = "none";
+    document.querySelector(".app-root").style.display = "flex";
+    document.getElementById("login-error").style.display = "none";
+    document.getElementById("login-username").value = "";
+    document.getElementById("login-password").value = "";
+    const initials = user.nama.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();
+    document.getElementById("user-avatar").textContent = initials || "?";
+    document.getElementById("user-chip-name").textContent = user.nama;
+    document.getElementById("user-chip-role").textContent = user.role;
+    document.getElementById("nav-user-btn").style.display = user.role === "Admin" ? "flex" : "none";
+    renderAll();
+  }
+
+  document.getElementById("btn-login").addEventListener("click", doLogin);
+  document.getElementById("login-password").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
+  document.getElementById("login-username").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
+
+  function doLogin(){
+    const username = document.getElementById("login-username").value.trim();
+    const password = document.getElementById("login-password").value;
+    const errEl = document.getElementById("login-error");
+    const user = DB.users.find(u=>u.username===username && u.password===hashPass(password));
+    if(!user){
+      errEl.textContent = "Username atau password salah.";
+      errEl.style.display = "block";
+      return;
+    }
+    try{
+      Store.set(SESSION_KEY, JSON.stringify({ username: user.username })).catch(()=>{});
+    }catch(e){
+      console.warn("Sesi tidak dapat disimpan (mode file lokal), tetap lanjut login.", e);
+    }
+    loginSuccess(user);
+    toast("Selamat datang, "+user.nama, "ok");
+  }
+
+  document.getElementById("btn-logout").addEventListener("click", ()=>{
+    try{ Store.delete(SESSION_KEY).catch(()=>{}); }catch(e){}
+    currentUser = null;
+    showLogin();
+  });
+
+  function toast(msg, type){
+    const root = document.getElementById("toast-root");
+    const el = document.createElement("div");
+    el.className = "toast"+(type?" "+type:"");
+    el.textContent = msg;
+    root.appendChild(el);
+    setTimeout(()=>{ el.remove(); }, 2600);
+  }
+
+  /* ---------- Navigation ---------- */
+  const titles = {
+    dashboard: ["Dashboard","Ringkasan kehadiran hari ini"],
+    siswa: ["Data Siswa","Kelola data dan barcode siswa"],
+    absensi: ["Absensi / Scan","Pindai barcode untuk mencatat kehadiran"],
+    laporan: ["Laporan","Rekap dan riwayat kehadiran siswa"],
+    kartu: ["Cetak Kartu","Kartu barcode siswa siap cetak"],
+    user: ["Kelola User","Atur akun yang dapat mengakses sistem"],
+    pengaturan: ["Pengaturan","Atur jam masuk dan preferensi sistem"]
+  };
+  document.getElementById("nav").addEventListener("click", (e)=>{
+    const btn = e.target.closest(".nav-btn");
+    if(!btn) return;
+    const v = btn.dataset.view;
+    if(v === "user" && (!currentUser || currentUser.role !== "Admin")) return;
+    document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".view").forEach(s=>s.classList.remove("active"));
+    document.getElementById("view-"+v).classList.add("active");
+    document.getElementById("page-title").textContent = titles[v][0];
+    document.getElementById("page-sub").textContent = titles[v][1];
+    if(v !== "absensi" && camActive) stopCamera();
+    if(v === "absensi") setTimeout(()=>document.getElementById("scan-input").focus(), 50);
+    if(v === "siswa") renderSiswaTable();
+    if(v === "laporan") renderLaporan();
+    if(v === "kartu") renderKartu();
+    if(v === "user") renderUserTable();
+  });
+
+  const chip = document.getElementById("today-chip");
+  chip.textContent = fmtTanggal(todayISO());
+
+  /* ---------- Kelas helpers ---------- */
+  function getKelasList(){
+    const set = new Set(DB.students.map(s=>s.kelas).filter(Boolean));
+    return Array.from(set).sort();
+  }
+  function fillKelasSelects(){
+    const kelasList = getKelasList();
+    const targets = ["siswa-filter-kelas","absensi-filter-kelas","lap-kelas","kartu-filter-kelas"];
+    targets.forEach(id=>{
+      const el = document.getElementById(id);
+      const current = el.value;
+      el.innerHTML = '<option value="">Semua Kelas</option>' + kelasList.map(k=>`<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`).join("");
+      if(kelasList.includes(current)) el.value = current;
+    });
+    const lapSiswa = document.getElementById("lap-siswa");
+    const curS = lapSiswa.value;
+    lapSiswa.innerHTML = '<option value="">Semua Siswa</option>' + DB.students
+      .slice().sort((a,b)=>a.nama.localeCompare(b.nama))
+      .map(s=>`<option value="${s.id}">${escapeHtml(s.nama)} (${escapeHtml(s.nis)})</option>`).join("");
+    if(DB.students.find(s=>s.id===curS)) lapSiswa.value = curS;
+  }
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+  }
+
+  /* ---------- Attendance status determination ---------- */
+  function determineStatus(waktu){
+    const [h,m] = DB.settings.batasTerlambat.split(":").map(Number);
+    const [wh,wm] = waktu.split(":").map(Number);
+    if(wh > h || (wh === h && wm > m)) return "Terlambat";
+    return "Hadir";
+  }
+
+  function recordAttendance(rawCode){
+    const code = String(rawCode).trim();
+    if(!code) return;
+    const student = DB.students.find(s=>s.nis === code);
+    const flash = document.getElementById("last-flash");
+    if(!student){
+      flash.className = "last-flash bad";
+      flash.innerHTML = `<div class="nm">Barcode tidak dikenali</div><div class="meta">Kode: ${escapeHtml(code)}</div>`;
+      toast("Barcode tidak dikenali: "+code, "bad");
+      return;
+    }
+    const today = todayISO();
+    const existing = DB.attendance.find(a=>a.studentId===student.id && a.tanggal===today);
+    if(existing){
+      flash.className = "last-flash bad";
+      flash.innerHTML = `<div class="nm">${escapeHtml(student.nama)}</div><div class="meta">Sudah tercatat ${existing.status} pukul ${existing.waktu}</div>`;
+      toast(student.nama+" sudah absen hari ini", "bad");
+      return;
+    }
+    const waktu = nowTime();
+    const status = determineStatus(waktu);
+    DB.attendance.push({ id: uid(), studentId: student.id, tanggal: today, waktu, status });
+    saveData();
+    flash.className = "last-flash ok";
+    flash.innerHTML = `<div class="nm">${escapeHtml(student.nama)}</div><div class="meta">${escapeHtml(student.kelas||"-")} · ${status} · ${waktu}</div>`;
+    toast(student.nama+" — "+status, "ok");
+    renderAll();
+  }
+
+  const scanInput = document.getElementById("scan-input");
+  scanInput.addEventListener("keydown", (e)=>{
+    if(e.key === "Enter"){
+      e.preventDefault();
+      recordAttendance(scanInput.value);
+      scanInput.value = "";
+    }
+  });
+
+  /* ---------- Camera scanning ---------- */
+  const camBtn = document.getElementById("btn-toggle-cam");
+  camBtn.addEventListener("click", ()=>{
+    if(camActive) stopCamera(); else startCamera();
+  });
+  function startCamera(){
+    const region = document.getElementById("cam-region");
+    region.innerHTML = '<div id="qr-reader" style="width:100%;"></div>';
+    html5Qr = new Html5Qrcode("qr-reader", { formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.QR_CODE ] });
+    html5Qr.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 120 } },
+      (decodedText)=>{ recordAttendance(decodedText); },
+      ()=>{}
+    ).then(()=>{
+      camActive = true;
+      camBtn.innerHTML = 'Matikan Kamera';
+    }).catch((err)=>{
+      toast("Tidak dapat mengakses kamera", "bad");
+      console.error(err);
+      region.innerHTML = "";
+    });
+  }
+  function stopCamera(){
+    if(html5Qr){
+      html5Qr.stop().then(()=>{
+        html5Qr.clear();
+        document.getElementById("cam-region").innerHTML = "";
+      }).catch(()=>{});
+    }
+    camActive = false;
+    camBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> Gunakan Kamera';
+  }
+
+  /* ---------- Render: Dashboard ---------- */
+  function renderDashboard(){
+    const today = todayISO();
+    const todaysRecords = DB.attendance.filter(a=>a.tanggal===today);
+    document.getElementById("stat-total").textContent = DB.students.length;
+    document.getElementById("stat-hadir").textContent = todaysRecords.filter(a=>a.status==="Hadir").length;
+    document.getElementById("stat-terlambat").textContent = todaysRecords.filter(a=>a.status==="Terlambat").length;
+    document.getElementById("stat-belum").textContent = DB.students.length - todaysRecords.length;
+
+    const feed = document.getElementById("dash-feed");
+    const recent = todaysRecords.slice().sort((a,b)=>b.waktu.localeCompare(a.waktu)).slice(0,8);
+    if(recent.length===0){
+      feed.innerHTML = '<div class="empty-state"><p>Belum ada aktivitas scan hari ini.</p></div>';
+    } else {
+      feed.innerHTML = recent.map(r=>{
+        const s = DB.students.find(s=>s.id===r.studentId);
+        if(!s) return "";
+        const initials = s.nama.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();
+        const badgeClass = r.status==="Hadir" ? "badge-hadir" : "badge-terlambat";
+        return `<div class="feed-item">
+          <div class="feed-avatar">${initials}</div>
+          <div><strong>${escapeHtml(s.nama)}</strong><br><span style="color:var(--muted);font-size:11.5px;">${escapeHtml(s.kelas||"-")}</span></div>
+          <span class="badge ${badgeClass}">${r.status}</span>
+          <span class="feed-time">${r.waktu}</span>
+        </div>`;
+      }).join("");
+    }
+
+    const kelasList = getKelasList();
+    const tbody = document.getElementById("dash-kelas-table");
+    if(kelasList.length===0){
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Belum ada data kelas.</td></tr>`;
+    } else {
+      tbody.innerHTML = kelasList.map(k=>{
+        const students = DB.students.filter(s=>s.kelas===k);
+        const recs = todaysRecords.filter(a=>students.find(s=>s.id===a.studentId));
+        const hadir = recs.filter(a=>a.status==="Hadir").length;
+        const terlambat = recs.filter(a=>a.status==="Terlambat").length;
+        return `<tr>
+          <td><span class="kelas-pill">${escapeHtml(k)}</span></td>
+          <td>${students.length}</td>
+          <td>${hadir}</td>
+          <td>${terlambat}</td>
+          <td>${students.length - recs.length}</td>
+        </tr>`;
+      }).join("");
+    }
+    document.getElementById("side-count-students").textContent = DB.students.length;
+  }
+
+  /* ---------- Render: Siswa ---------- */
+  function renderSiswaTable(){
+    const search = document.getElementById("siswa-search").value.trim().toLowerCase();
+    const kelasFilter = document.getElementById("siswa-filter-kelas").value;
+    let list = DB.students.slice().sort((a,b)=>a.nama.localeCompare(b.nama));
+    if(search) list = list.filter(s=> s.nama.toLowerCase().includes(search) || s.nis.toLowerCase().includes(search));
+    if(kelasFilter) list = list.filter(s=>s.kelas===kelasFilter);
+
+    const tbody = document.getElementById("siswa-table");
+    const emptyEl = document.getElementById("siswa-empty");
+    if(list.length===0){
+      tbody.innerHTML = "";
+      emptyEl.style.display = "block";
+    } else {
+      emptyEl.style.display = "none";
+      tbody.innerHTML = list.map(s=>`
+        <tr>
+          <td><svg id="bc-${s.id}" style="height:30px;"></svg></td>
+          <td class="mono">${escapeHtml(s.nis)}</td>
+          <td>${escapeHtml(s.nama)}</td>
+          <td><span class="kelas-pill">${escapeHtml(s.kelas||"-")}</span></td>
+          <td>${escapeHtml(s.jk||"-")}</td>
+          <td style="text-align:right;">
+            <button class="btn btn-ghost btn-sm" data-edit="${s.id}">Edit</button>
+            <button class="btn btn-danger btn-sm" data-del="${s.id}">Hapus</button>
+          </td>
+        </tr>
+      `).join("");
+      list.forEach(s=>{
+        const el = document.getElementById(`bc-${s.id}`);
+        if(!el) return;
+        try{
+          JsBarcode(el, s.nis, { format:"CODE128", displayValue:false, height:30, margin:0, width:1.4 });
+        }catch(e){ console.error("Gagal membuat barcode untuk", s.nis, e); }
+      });
+    }
+  }
+  document.getElementById("siswa-search").addEventListener("input", renderSiswaTable);
+  document.getElementById("siswa-filter-kelas").addEventListener("change", renderSiswaTable);
+  document.getElementById("siswa-table").addEventListener("click",(e)=>{
+    const editId = e.target.dataset.edit;
+    const delId = e.target.dataset.del;
+    if(editId) openSiswaModal(DB.students.find(s=>s.id===editId));
+    if(delId) confirmDeleteSiswa(delId);
+  });
+
+  function confirmDeleteSiswa(id){
+    const s = DB.students.find(x=>x.id===id);
+    if(!s) return;
+    showModal(`
+      <h3>Hapus Siswa?</h3>
+      <p style="font-size:13.5px;color:var(--muted);">Data <strong>${escapeHtml(s.nama)}</strong> beserta riwayat absensinya akan dihapus permanen.</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="m-cancel">Batal</button>
+        <button class="btn btn-danger" id="m-confirm">Hapus</button>
+      </div>
+    `);
+    document.getElementById("m-cancel").onclick = closeModal;
+    document.getElementById("m-confirm").onclick = ()=>{
+      DB.students = DB.students.filter(x=>x.id!==id);
+      DB.attendance = DB.attendance.filter(a=>a.studentId!==id);
+      saveData(); renderAll(); closeModal();
+      toast("Siswa dihapus","ok");
+    };
+  }
+
+  document.getElementById("btn-add-siswa").addEventListener("click", ()=>openSiswaModal(null));
+
+  /* ---------- Excel: template & import/export siswa ---------- */
+  document.getElementById("btn-template-excel").addEventListener("click", ()=>{
+    const ws = XLSX.utils.json_to_sheet([
+      { NIS:"10001", Nama:"Contoh Siswa Satu", Kelas:"10-A", JK:"L" },
+      { NIS:"10002", Nama:"Contoh Siswa Dua", Kelas:"10-A", JK:"P" }
+    ]);
+    ws['!cols'] = [{wch:12},{wch:26},{wch:10},{wch:6}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template Siswa");
+    XLSX.writeFile(wb, "template-data-siswa.xlsx");
+  });
+
+  document.getElementById("btn-export-siswa").addEventListener("click", ()=>{
+    if(DB.students.length===0){ toast("Belum ada data siswa untuk diekspor","bad"); return; }
+    const rows = DB.students.slice().sort((a,b)=>a.nama.localeCompare(b.nama)).map(s=>({
+      NIS: s.nis, Nama: s.nama, Kelas: s.kelas||"", JK: s.jk||""
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:12},{wch:26},{wch:10},{wch:6}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Data Siswa");
+    XLSX.writeFile(wb, "data-siswa-"+todayISO()+".xlsx");
+    toast("Data siswa diekspor ke Excel","ok");
+  });
+
+  document.getElementById("btn-import-siswa").addEventListener("click", ()=>{
+    document.getElementById("siswa-import-file").click();
+  });
+  document.getElementById("siswa-import-file").addEventListener("change", (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      try{
+        const wb = XLSX.read(ev.target.result, { type:"binary" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval:"" });
+        if(rows.length===0){ toast("File Excel kosong","bad"); return; }
+        let added = 0, updated = 0, skipped = 0;
+        rows.forEach(row=>{
+          const keys = Object.keys(row).reduce((acc,k)=>{ acc[k.toString().trim().toLowerCase()] = row[k]; return acc; }, {});
+          const nis = String(keys["nis"] ?? "").trim();
+          const nama = String(keys["nama"] ?? "").trim();
+          const kelas = String(keys["kelas"] ?? "").trim();
+          let jk = String(keys["jk"] ?? "").trim().toUpperCase();
+          if(jk !== "L" && jk !== "P") jk = "";
+          if(!nis || !nama){ skipped++; return; }
+          const existing = DB.students.find(s=>s.nis===nis);
+          if(existing){
+            existing.nama = nama; existing.kelas = kelas; existing.jk = jk || existing.jk;
+            updated++;
+          } else {
+            DB.students.push({ id: uid(), nis, nama, kelas, jk });
+            added++;
+          }
+        });
+        saveData(); renderAll();
+        toast(`Impor selesai: ${added} ditambah, ${updated} diperbarui${skipped?`, ${skipped} dilewati`:""}`, "ok");
+      }catch(err){
+        console.error(err);
+        toast("Gagal membaca file Excel. Pastikan format sesuai template.","bad");
+      }
+      e.target.value = "";
+    };
+    reader.readAsBinaryString(file);
+  });
+
+  function openSiswaModal(existing){
+    showModal(`
+      <h3>${existing ? "Edit Siswa" : "Tambah Siswa"}</h3>
+      <div class="field"><label>NIS (jadi nilai barcode)</label><input id="f-nis" class="mono" value="${existing?escapeHtml(existing.nis):""}"></div>
+      <div class="field"><label>Nama Lengkap</label><input id="f-nama" value="${existing?escapeHtml(existing.nama):""}"></div>
+      <div class="row-2">
+        <div class="field"><label>Kelas</label><input id="f-kelas" placeholder="cth. 10-A" value="${existing?escapeHtml(existing.kelas||""):""}"></div>
+        <div class="field"><label>Jenis Kelamin</label>
+          <select id="f-jk">
+            <option value="L" ${existing&&existing.jk==="L"?"selected":""}>Laki-laki</option>
+            <option value="P" ${existing&&existing.jk==="P"?"selected":""}>Perempuan</option>
+          </select>
         </div>
       </div>
-      
-      <div class="mt-3 pt-3 border-t flex items-center gap-2">
-        <label for="filter-kelas" class="text-xs font-semibold text-gray-600 shrink-0 mb-0">Pilih Kelas:</label>
-        <select id="filter-kelas" onchange="renderStudentList()" class="border rounded-lg px-2 py-1 text-xs flex-1 bg-gray-50 focus:outline-none focus:border-blue-500">
-          <option value="ALL">Semua Kelas</option>
-          <option value="7.1">7.1</option>
-          <option value="7.2">7.2</option>
-          <option value="7.3">7.3</option>
-          <option value="7.4">7.4</option>
-          <option value="7.5">7.5</option>
-        </select>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="m-cancel">Batal</button>
+        <button class="btn btn-primary" id="m-save">${existing?"Simpan Perubahan":"Tambah"}</button>
       </div>
-    </div>
-    
-    <div id="print-area">
-      <div class="hidden print:block text-center mb-6 border-b pb-3">
-        <h2 class="text-xl font-bold text-gray-800">Daftar Kartu QR Code Siswa</h2>
-        <p id="print-kelas-info" class="text-sm text-gray-500">Kelas: Semua Kelas</p>
-      </div>
-      
-      <div id="student-list" class="space-y-4 print:grid print:grid-cols-2 print:gap-4 print:space-y-0">
-        Membuka data dari spreadsheet...
-      </div>
-    </div>
-   </section>
+    `);
+    document.getElementById("m-cancel").onclick = closeModal;
+    document.getElementById("m-save").onclick = ()=>{
+      const nis = document.getElementById("f-nis").value.trim();
+      const nama = document.getElementById("f-nama").value.trim();
+      const kelas = document.getElementById("f-kelas").value.trim();
+      const jk = document.getElementById("f-jk").value;
+      if(!nis || !nama){ toast("NIS dan Nama wajib diisi","bad"); return; }
+      const dup = DB.students.find(s=>s.nis===nis && (!existing || s.id!==existing.id));
+      if(dup){ toast("NIS sudah digunakan siswa lain","bad"); return; }
+      if(existing){
+        existing.nis=nis; existing.nama=nama; existing.kelas=kelas; existing.jk=jk;
+        toast("Data siswa diperbarui","ok");
+      } else {
+        DB.students.push({ id:uid(), nis, nama, kelas, jk });
+        toast("Siswa ditambahkan","ok");
+      }
+      saveData(); renderAll(); closeModal();
+    };
+  }
 
-   <section id="panel-laporan" class="no-print hidden">
-    <div class="bg-white p-4 rounded-lg border shadow-sm">
-      <h2 class="font-bold text-gray-800 mb-3 text-sm">Riwayat Absensi Masuk</h2>
-      
-      <div class="flex flex-col sm:flex-row gap-2 mb-4">
-        <input type="date" id="filter-date" onchange="renderReport()" class="border rounded-lg px-3 py-2 text-sm flex-1"> 
-        <select id="filter-laporan-kelas" onchange="renderReport()" class="border rounded-lg px-3 py-2 text-sm flex-1 bg-gray-50 focus:outline-none focus:border-blue-500">
-          <option value="">pilih kelas</option>
-          <option value="7.1">7.1</option>
-          <option value="7.2">7.2</option>
-          <option value="7.3">7.3</option>
-          <option value="7.4">7.4</option>
-          <option value="7.5">7.5</option>
-        </select>
-      </div>
+  /* ---------- Render: Absensi table ---------- */
+  function renderAbsensiTable(){
+    const today = todayISO();
+    const kelasFilter = document.getElementById("absensi-filter-kelas").value;
+    let list = DB.students.slice().sort((a,b)=>a.nama.localeCompare(b.nama));
+    if(kelasFilter) list = list.filter(s=>s.kelas===kelasFilter);
+    const tbody = document.getElementById("absensi-table");
+    if(list.length===0){
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Belum ada data siswa.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(s=>{
+      const rec = DB.attendance.find(a=>a.studentId===s.id && a.tanggal===today);
+      const status = rec ? rec.status : "Belum";
+      const badgeMap = { Hadir:"badge-hadir", Terlambat:"badge-terlambat", Izin:"badge-izin", Sakit:"badge-sakit", Alpha:"badge-alpha", Belum:"badge-belum" };
+      return `<tr>
+        <td class="mono">${escapeHtml(s.nis)}</td>
+        <td>${escapeHtml(s.nama)}</td>
+        <td><span class="kelas-pill">${escapeHtml(s.kelas||"-")}</span></td>
+        <td class="mono">${rec?rec.waktu:"-"}</td>
+        <td>
+          <select class="status-select" data-student="${s.id}">
+            ${["Belum","Hadir","Terlambat","Izin","Sakit","Alpha"].map(opt=>`<option value="${opt}" ${status===opt?"selected":""}>${opt}</option>`).join("")}
+          </select>
+        </td>
+      </tr>`;
+    }).join("");
+  }
+  document.getElementById("absensi-filter-kelas").addEventListener("change", renderAbsensiTable);
+  document.getElementById("absensi-table").addEventListener("change",(e)=>{
+    if(!e.target.classList.contains("status-select")) return;
+    const studentId = e.target.dataset.student;
+    const newStatus = e.target.value;
+    const today = todayISO();
+    let rec = DB.attendance.find(a=>a.studentId===studentId && a.tanggal===today);
+    if(newStatus === "Belum"){
+      if(rec) DB.attendance = DB.attendance.filter(a=>a!==rec);
+    } else if(rec){
+      rec.status = newStatus;
+    } else {
+      DB.attendance.push({ id:uid(), studentId, tanggal:today, waktu:nowTime(), status:newStatus });
+    }
+    saveData(); renderAll();
+    toast("Status diperbarui","ok");
+  });
 
-      <div id="report-table-wrap" class="overflow-x-auto">
-       <table class="w-full text-xs border-collapse">
-        <thead>
-         <tr class="bg-gray-100 text-gray-600">
-          <th class="p-2 text-left border">ID QR</th>
-          <th class="p-2 text-left border">Nama Terdeteksi</th>
-          <th class="p-2 text-left border">Kelas</th>
-          <th class="p-2 text-left border">Waktu</th>
-          <th class="p-2 text-left border">Status</th>
-         </tr>
-        </thead>
-        <tbody id="report-body"></tbody>
-       </table>
-      </div>
-      <p id="report-empty" class="text-center text-gray-500 mt-4 text-sm">Silahkan pilih kelas terlebih dahulu untuk menampilkan data.</p>
-    </div>
-   </section>
-  </main>
+  /* ---------- Render: Laporan ---------- */
+  function renderLaporan(){
+    const dari = document.getElementById("lap-dari").value || "0000-01-01";
+    const sampai = document.getElementById("lap-sampai").value || "9999-12-31";
+    const kelasFilter = document.getElementById("lap-kelas").value;
+    const siswaFilter = document.getElementById("lap-siswa").value;
 
-  <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby-sCpEOcw4dxkfNnw2503RtaVc_eHDGkQ1WgM4U54zOYxSwoyPIOLycCGeXG9_x9Wj/exec";
+    let students = DB.students.slice();
+    if(kelasFilter) students = students.filter(s=>s.kelas===kelasFilter);
+    if(siswaFilter) students = students.filter(s=>s.id===siswaFilter);
 
-    let students = [];
-    let attendanceData = [];
-    
-    let videoStream = null;
-    let isScanningActive = false;
-    const videoEl = document.getElementById('webcam-video');
-    const canvasElement = document.createElement('canvas');
-    const canvasCtx = canvasElement.getContext('2d');
+    let records = DB.attendance.filter(a=> a.tanggal>=dari && a.tanggal<=sampai && students.find(s=>s.id===a.studentId));
 
-    window.addEventListener('load', async () => {
-      document.getElementById('filter-date').value = new Date().toLocaleDateString('en-CA');
-      await syncDataFromSpreadsheet();
-      startCamera();
+    const rekapBody = document.getElementById("lap-rekap-table");
+    if(students.length===0){
+      rekapBody.innerHTML = `<tr><td colspan="9" class="empty-state">Tidak ada data untuk filter ini.</td></tr>`;
+    } else {
+      rekapBody.innerHTML = students.slice().sort((a,b)=>a.nama.localeCompare(b.nama)).map(s=>{
+        const recs = records.filter(r=>r.studentId===s.id);
+        const c = { Hadir:0, Terlambat:0, Izin:0, Sakit:0, Alpha:0 };
+        recs.forEach(r=>{ if(c[r.status]!==undefined) c[r.status]++; });
+        const totalHari = recs.length || 1;
+        const pct = Math.round(((c.Hadir+c.Terlambat)/totalHari)*100);
+        return `<tr>
+          <td class="mono">${escapeHtml(s.nis)}</td>
+          <td>${escapeHtml(s.nama)}</td>
+          <td><span class="kelas-pill">${escapeHtml(s.kelas||"-")}</span></td>
+          <td>${c.Hadir}</td><td>${c.Terlambat}</td><td>${c.Izin}</td><td>${c.Sakit}</td><td>${c.Alpha}</td>
+          <td><strong>${recs.length?pct+"%":"-"}</strong></td>
+        </tr>`;
+      }).join("");
+    }
+
+    const detailBody = document.getElementById("lap-detail-table");
+    if(records.length===0){
+      detailBody.innerHTML = `<tr><td colspan="6" class="empty-state">Tidak ada catatan pada rentang ini.</td></tr>`;
+    } else {
+      detailBody.innerHTML = records.slice().sort((a,b)=> a.tanggal===b.tanggal ? a.waktu.localeCompare(b.waktu) : b.tanggal.localeCompare(a.tanggal)).map(r=>{
+        const s = DB.students.find(s=>s.id===r.studentId);
+        if(!s) return "";
+        const badgeMap = { Hadir:"badge-hadir", Terlambat:"badge-terlambat", Izin:"badge-izin", Sakit:"badge-sakit", Alpha:"badge-alpha" };
+        return `<tr>
+          <td>${fmtTanggal(r.tanggal)}</td>
+          <td class="mono">${escapeHtml(s.nis)}</td>
+          <td>${escapeHtml(s.nama)}</td>
+          <td><span class="kelas-pill">${escapeHtml(s.kelas||"-")}</span></td>
+          <td class="mono">${r.waktu}</td>
+          <td><span class="badge ${badgeMap[r.status]||''}">${r.status}</span></td>
+        </tr>`;
+      }).join("");
+    }
+    window.__lastLaporan = { students, records };
+  }
+  document.getElementById("btn-terapkan-filter").addEventListener("click", renderLaporan);
+
+  document.getElementById("btn-export-excel").addEventListener("click", ()=>{
+    renderLaporan();
+    const { students, records } = window.__lastLaporan || { students:[], records:[] };
+    if(students.length===0){ toast("Tidak ada data untuk diekspor","bad"); return; }
+
+    const rekapRows = students.slice().sort((a,b)=>a.nama.localeCompare(b.nama)).map(s=>{
+      const recs = records.filter(r=>r.studentId===s.id);
+      const c = { Hadir:0, Terlambat:0, Izin:0, Sakit:0, Alpha:0 };
+      recs.forEach(r=>{ if(c[r.status]!==undefined) c[r.status]++; });
+      const totalHari = recs.length || 1;
+      const pct = recs.length ? Math.round(((c.Hadir+c.Terlambat)/totalHari)*100) : 0;
+      return { NIS:s.nis, Nama:s.nama, Kelas:s.kelas||"", Hadir:c.Hadir, Terlambat:c.Terlambat, Izin:c.Izin, Sakit:c.Sakit, Alpha:c.Alpha, "% Kehadiran": recs.length ? pct+"%" : "-" };
     });
 
-    async function syncDataFromSpreadsheet() {
-      const container = document.getElementById('student-list');
-      if(container) container.innerHTML = '<p class="text-center text-blue-500 text-sm py-8 animate-pulse">Sedang mengunduh data dari Spreadsheet...</p>';
-      
-      try {
-        const resStudents = await fetch(`${SCRIPT_URL}?action=getStudents`);
-        students = await resStudents.json();
-        
-        const resAttendance = await fetch(`${SCRIPT_URL}?action=getAttendance`);
-        attendanceData = await resAttendance.json();
-        
-        console.log("Sinkronisasi Selesai. Jumlah siswa terunduh:", students ? students.length : 0);
-        
-        renderStudentList();
-        renderReport();
-      } catch (err) {
-        console.error("Gagal melakukan Sinkronisasi Data:", err);
-        if(container) {
-          container.innerHTML = `
-            <div class="p-4 bg-red-50 border border-red-200 rounded-lg text-center text-red-800 text-xs">
-              <p class="font-bold mb-1">Gagal Menghubungkan ke Google Sheets!</p>
-              <p class="text-gray-600 mb-2">Pastikan Script URL Anda sudah benar dan sudah di-Deploy ulang sebagai "Anyone".</p>
-              <button onclick="syncDataFromSpreadsheet()" class="px-3 py-1 bg-red-600 text-white rounded font-semibold hover:bg-red-700">Coba Lagi</button>
-            </div>`;
+    const detailRows = records.slice().sort((a,b)=>a.tanggal.localeCompare(b.tanggal)).map(r=>{
+      const s = DB.students.find(s=>s.id===r.studentId);
+      if(!s) return null;
+      return { Tanggal:r.tanggal, NIS:s.nis, Nama:s.nama, Kelas:s.kelas||"", Waktu:r.waktu, Status:r.status };
+    }).filter(Boolean);
+
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.json_to_sheet(rekapRows);
+    ws1['!cols'] = [{wch:12},{wch:24},{wch:10},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws1, "Rekap Per Siswa");
+    const ws2 = XLSX.utils.json_to_sheet(detailRows.length ? detailRows : [{ Tanggal:"", NIS:"", Nama:"", Kelas:"", Waktu:"", Status:"" }]);
+    ws2['!cols'] = [{wch:12},{wch:12},{wch:24},{wch:10},{wch:10},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws2, "Detail Catatan");
+    XLSX.writeFile(wb, "laporan-absensi-"+todayISO()+".xlsx");
+    toast("Laporan diekspor ke Excel","ok");
+  });
+
+  document.getElementById("btn-export-csv").addEventListener("click", ()=>{
+    renderLaporan();
+    const { records } = window.__lastLaporan || { records: [] };
+    if(records.length===0){ toast("Tidak ada data untuk diekspor","bad"); return; }
+    let csv = "Tanggal,NIS,Nama,Kelas,Waktu,Status\n";
+    records.slice().sort((a,b)=>a.tanggal.localeCompare(b.tanggal)).forEach(r=>{
+      const s = DB.students.find(s=>s.id===r.studentId);
+      if(!s) return;
+      csv += `${r.tanggal},${s.nis},"${s.nama.replace(/"/g,'""')}",${s.kelas||""},${r.waktu},${r.status}\n`;
+    });
+    const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "laporan-absensi-"+todayISO()+".csv";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("CSV diunduh","ok");
+  });
+
+  document.getElementById("btn-print-laporan").addEventListener("click", ()=>{
+    renderLaporan();
+    const rekapHtml = document.getElementById("lap-rekap-table").parentElement.outerHTML;
+    const detailHtml = document.getElementById("lap-detail-table").parentElement.outerHTML;
+    document.getElementById("print-area").innerHTML = `
+      <div style="padding:20px;font-family:Inter,sans-serif;">
+        <h2 style="font-family:'Space Grotesk',sans-serif;">Laporan Absensi — ${escapeHtml(DB.settings.namaSekolah)}</h2>
+        <p style="font-size:12px;color:#666;">Dicetak: ${fmtTanggal(todayISO())}</p>
+        <h3>Rekap Per Siswa</h3>${rekapHtml}
+        <h3>Detail Catatan</h3>${detailHtml}
+      </div>`;
+    window.print();
+  });
+
+  /* ---------- Render: Kartu ---------- */
+  function renderKartu(){
+    const kelasFilter = document.getElementById("kartu-filter-kelas").value;
+    let list = DB.students.slice().sort((a,b)=>a.nama.localeCompare(b.nama));
+    if(kelasFilter) list = list.filter(s=>s.kelas===kelasFilter);
+    const grid = document.getElementById("kartu-grid");
+    if(list.length===0){
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p>Tidak ada siswa untuk ditampilkan.</p></div>`;
+      return;
+    }
+    grid.innerHTML = list.map(s=>`
+      <div class="id-card">
+        <div class="school">${escapeHtml(DB.settings.namaSekolah)}</div>
+        <div class="nm">${escapeHtml(s.nama)}</div>
+        <div class="kl">Kelas ${escapeHtml(s.kelas||"-")} · ${s.jk==="P"?"Perempuan":"Laki-laki"}</div>
+        <svg id="kc-${s.id}"></svg>
+        <div class="nis">${escapeHtml(s.nis)}</div>
+      </div>
+    `).join("");
+    list.forEach(s=>{
+      const el = document.getElementById(`kc-${s.id}`);
+      if(!el) return;
+      try{ JsBarcode(el, s.nis, { format:"CODE128", displayValue:false, height:40, margin:4, width:1.6 }); }catch(e){ console.error("Gagal membuat barcode kartu untuk", s.nis, e); }
+    });
+  }
+  document.getElementById("kartu-filter-kelas").addEventListener("change", renderKartu);
+  document.getElementById("btn-print-kartu").addEventListener("click", ()=>{
+    document.getElementById("print-area").innerHTML = `<div style="padding:16px;">${document.getElementById("kartu-grid").outerHTML}</div>`;
+    window.print();
+  });
+
+  /* ---------- Modal helpers ---------- */
+  function showModal(innerHtml){
+    const root = document.getElementById("modal-root");
+    root.innerHTML = `<div class="modal-overlay" id="overlay"><div class="modal">${innerHtml}</div></div>`;
+    document.getElementById("overlay").addEventListener("click",(e)=>{ if(e.target.id==="overlay") closeModal(); });
+  }
+  function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
+
+  /* ---------- Pengaturan ---------- */
+  function renderPengaturan(){
+    document.getElementById("set-nama-sekolah").value = DB.settings.namaSekolah;
+    document.getElementById("set-jam-masuk").value = DB.settings.jamMasuk;
+    document.getElementById("set-batas-terlambat").value = DB.settings.batasTerlambat;
+  }
+  document.getElementById("btn-simpan-pengaturan").addEventListener("click", ()=>{
+    DB.settings.namaSekolah = document.getElementById("set-nama-sekolah").value.trim() || "Sekolah";
+    DB.settings.jamMasuk = document.getElementById("set-jam-masuk").value || "07:00";
+    DB.settings.batasTerlambat = document.getElementById("set-batas-terlambat").value || "07:15";
+    saveData();
+    toast("Pengaturan disimpan","ok");
+  });
+  document.getElementById("btn-reset-data").addEventListener("click", ()=>{
+    showModal(`
+      <h3>Hapus Semua Data?</h3>
+      <p style="font-size:13.5px;color:var(--muted);">Tindakan ini akan menghapus seluruh data siswa dan riwayat absensi secara permanen dan tidak dapat dibatalkan.</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="m-cancel">Batal</button>
+        <button class="btn btn-danger" id="m-confirm">Ya, Hapus Semua</button>
+      </div>
+    `);
+    document.getElementById("m-cancel").onclick = closeModal;
+    document.getElementById("m-confirm").onclick = ()=>{
+      DB.students = []; DB.attendance = [];
+      saveData(); renderAll(); closeModal();
+      toast("Semua data telah dihapus","ok");
+    };
+  });
+
+  /* ---------- Akun Saya ---------- */
+  function renderAkunSaya(){
+    if(!currentUser) return;
+    document.getElementById("me-nama").value = currentUser.nama;
+    document.getElementById("me-username").value = currentUser.username;
+    document.getElementById("me-password").value = "";
+    document.getElementById("me-password2").value = "";
+  }
+  document.getElementById("btn-simpan-akun").addEventListener("click", ()=>{
+    if(!currentUser) return;
+    const nama = document.getElementById("me-nama").value.trim();
+    const username = document.getElementById("me-username").value.trim();
+    const pw1 = document.getElementById("me-password").value;
+    const pw2 = document.getElementById("me-password2").value;
+    if(!nama || !username){ toast("Nama dan username wajib diisi","bad"); return; }
+    const dup = DB.users.find(u=>u.username===username && u.id!==currentUser.id);
+    if(dup){ toast("Username sudah dipakai user lain","bad"); return; }
+    if(pw1 || pw2){
+      if(pw1.length < 4){ toast("Password minimal 4 karakter","bad"); return; }
+      if(pw1 !== pw2){ toast("Konfirmasi password tidak cocok","bad"); return; }
+    }
+    const user = DB.users.find(u=>u.id===currentUser.id);
+    user.nama = nama; user.username = username;
+    if(pw1) user.password = hashPass(pw1);
+    currentUser = user;
+    try{ Store.set(SESSION_KEY, JSON.stringify({ username: user.username })).catch(()=>{}); }catch(e){}
+    saveData();
+    document.getElementById("user-chip-name").textContent = user.nama;
+    const initials = user.nama.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();
+    document.getElementById("user-avatar").textContent = initials || "?";
+    renderAkunSaya();
+    toast("Akun berhasil diperbarui","ok");
+  });
+
+  /* ---------- Kelola User ---------- */
+  function renderUserTable(){
+    const tbody = document.getElementById("user-table");
+    if(DB.users.length===0){
+      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Belum ada user.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = DB.users.slice().sort((a,b)=>a.nama.localeCompare(b.nama)).map(u=>`
+      <tr>
+        <td class="mono">${escapeHtml(u.username)}</td>
+        <td>${escapeHtml(u.nama)}${u.id===currentUser.id?' <span class="badge badge-hadir">Anda</span>':''}</td>
+        <td><span class="kelas-pill">${escapeHtml(u.role)}</span></td>
+        <td style="text-align:right;">
+          <button class="btn btn-ghost btn-sm" data-edit-user="${u.id}">Edit</button>
+          <button class="btn btn-danger btn-sm" data-del-user="${u.id}">Hapus</button>
+        </td>
+      </tr>
+    `).join("");
+  }
+  document.getElementById("user-table").addEventListener("click",(e)=>{
+    const editId = e.target.dataset.editUser;
+    const delId = e.target.dataset.delUser;
+    if(editId) openUserModal(DB.users.find(u=>u.id===editId));
+    if(delId) confirmDeleteUser(delId);
+  });
+  document.getElementById("btn-add-user").addEventListener("click", ()=>openUserModal(null));
+
+  function openUserModal(existing){
+    showModal(`
+      <h3>${existing ? "Edit User" : "Tambah User"}</h3>
+      <div class="field"><label>Username</label><input id="fu-username" class="mono" value="${existing?escapeHtml(existing.username):""}"></div>
+      <div class="field"><label>Nama Lengkap</label><input id="fu-nama" value="${existing?escapeHtml(existing.nama):""}"></div>
+      <div class="field"><label>Role</label>
+        <select id="fu-role">
+          <option value="Admin" ${existing&&existing.role==="Admin"?"selected":""}>Admin</option>
+          <option value="Operator" ${existing&&existing.role==="Operator"?"selected":""}>Operator</option>
+        </select>
+      </div>
+      <div class="field"><label>Password ${existing?"(kosongkan jika tidak ganti)":""}</label><input type="password" id="fu-password"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="m-cancel">Batal</button>
+        <button class="btn btn-primary" id="m-save">${existing?"Simpan Perubahan":"Tambah"}</button>
+      </div>
+    `);
+    document.getElementById("m-cancel").onclick = closeModal;
+    document.getElementById("m-save").onclick = ()=>{
+      const username = document.getElementById("fu-username").value.trim();
+      const nama = document.getElementById("fu-nama").value.trim();
+      const role = document.getElementById("fu-role").value;
+      const password = document.getElementById("fu-password").value;
+      if(!username || !nama){ toast("Username dan nama wajib diisi","bad"); return; }
+      const dup = DB.users.find(u=>u.username===username && (!existing || u.id!==existing.id));
+      if(dup){ toast("Username sudah digunakan","bad"); return; }
+      if(!existing && password.length < 4){ toast("Password minimal 4 karakter","bad"); return; }
+      if(existing){
+        existing.username = username; existing.nama = nama; existing.role = role;
+        if(password){
+          if(password.length < 4){ toast("Password minimal 4 karakter","bad"); return; }
+          existing.password = hashPass(password);
         }
-      }
-    }
-
-    // EXTRAKSI TEXT ABSOLUT KELAS
-    function extractStudentKelas(student) {
-      if (!student) return "";
-      let cleanStudent = {};
-      Object.keys(student).forEach(key => {
-        cleanStudent[key.toString().toLowerCase().trim()] = student[key];
-      });
-      let foundKey = Object.keys(cleanStudent).find(k => k.includes('kelas') || k.includes('class') || k === 'kls');
-      if (foundKey && cleanStudent[foundKey] !== undefined && cleanStudent[foundKey] !== null) {
-        return cleanStudent[foundKey].toString().replace(/\s+/g, '').trim(); // Hapus spasi di dalam text teks
-      }
-      return "";
-    }
-
-    function extractStudentName(student) {
-      if (!student) return "";
-      let cleanStudent = {};
-      Object.keys(student).forEach(key => {
-        cleanStudent[key.toString().toLowerCase().trim()] = student[key];
-      });
-      let foundKey = Object.keys(cleanStudent).find(k => k.includes('nama') || k.includes('name'));
-      if (foundKey && cleanStudent[foundKey]) {
-        return cleanStudent[foundKey].toString().trim();
-      }
-      return "";
-    }
-
-    function extractStudentId(student) {
-      if (!student) return "";
-      let cleanStudent = {};
-      Object.keys(student).forEach(key => {
-        cleanStudent[key.toString().toLowerCase().trim()] = student[key];
-      });
-      let foundKey = Object.keys(cleanStudent).find(k => k === 'id' || k.includes('student_id') || k.includes('induk') || k.includes('qr'));
-      if (foundKey && cleanStudent[foundKey]) {
-        return cleanStudent[foundKey].toString().trim();
-      }
-      return (student.id || student.ID || "").toString().trim();
-    }
-
-    async function startCamera() {
-      if (videoStream) stopCamera();
-      try {
-        videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        videoEl.srcObject = videoStream;
-        videoEl.setAttribute("playsinline", true);
-        videoEl.play();
-        isScanningActive = true;
-        requestAnimationFrame(tickScan);
-      } catch (err) {
-        showScanError('Kamera tidak terdeteksi atau diblokir browser.');
-      }
-    }
-
-    function stopCamera() {
-      isScanningActive = false;
-      if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-        videoStream = null;
-      }
-      videoEl.srcObject = null;
-    }
-
-    function tickScan() {
-      if (!isScanningActive) return;
-
-      if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
-        canvasElement.height = videoEl.videoHeight;
-        canvasElement.width = videoEl.videoWidth;
-        canvasCtx.drawImage(videoEl, 0, 0, canvasElement.width, canvasElement.height);
-        
-        const imageData = canvasCtx.getImageData(0, 0, canvasElement.width, canvasElement.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
-
-        if (code && code.data) {
-          handleScan(code.data.trim());
-          isScanningActive = false; 
-          setTimeout(() => {
-            if (videoStream) { isScanningActive = true; requestAnimationFrame(tickScan); }
-          }, 3000);
-          return;
+        if(existing.id === currentUser.id){
+          currentUser = existing;
+          document.getElementById("user-chip-name").textContent = existing.nama;
+          document.getElementById("user-chip-role").textContent = existing.role;
         }
+        toast("User diperbarui","ok");
+      } else {
+        DB.users.push({ id: uid(), username, nama, role, password: hashPass(password) });
+        toast("User ditambahkan","ok");
       }
-      requestAnimationFrame(tickScan);
+      saveData(); renderUserTable(); closeModal();
+    };
+  }
+
+  function confirmDeleteUser(id){
+    if(id === currentUser.id){ toast("Tidak dapat menghapus akun yang sedang digunakan","bad"); return; }
+    const target = DB.users.find(u=>u.id===id);
+    if(!target) return;
+    if(target.role === "Admin" && DB.users.filter(u=>u.role==="Admin").length <= 1){
+      toast("Tidak dapat menghapus satu-satunya Admin","bad"); return;
     }
+    showModal(`
+      <h3>Hapus User?</h3>
+      <p style="font-size:13.5px;color:var(--muted);">Akun <strong>${escapeHtml(target.nama)}</strong> tidak akan bisa masuk lagi ke sistem.</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="m-cancel">Batal</button>
+        <button class="btn btn-danger" id="m-confirm">Hapus</button>
+      </div>
+    `);
+    document.getElementById("m-cancel").onclick = closeModal;
+    document.getElementById("m-confirm").onclick = ()=>{
+      DB.users = DB.users.filter(u=>u.id!==id);
+      saveData(); renderUserTable(); closeModal();
+      toast("User dihapus","ok");
+    };
+  }
 
-    function switchTab(tab) {
-      ['scanner','siswa','laporan'].forEach(t => {
-        document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
-        const btn = document.getElementById('tab-' + t);
-        btn.className = t === tab ? "flex-1 py-3 text-center tab-active" : "flex-1 py-3 text-center text-gray-600";
-      });
-      if (tab === 'scanner') startCamera(); else stopCamera();
-      if (tab === 'siswa') renderStudentList();
-      if (tab === 'laporan') renderReport();
-      if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
+  /* ---------- Render All ---------- */
+  function renderAll(){
+    fillKelasSelects();
+    renderDashboard();
+    renderSiswaTable();
+    renderAbsensiTable();
+    renderPengaturan();
+    renderAkunSaya();
+    if(document.getElementById("view-laporan").classList.contains("active")) renderLaporan();
+    if(document.getElementById("view-kartu").classList.contains("active")) renderKartu();
+    if(currentUser && document.getElementById("view-user").classList.contains("active")) renderUserTable();
+  }
 
-    async function handleScan(scannedData) {
-      document.getElementById('scan-result').classList.add('hidden');
-      document.getElementById('scan-error').classList.add('hidden');
-
-      let student = (students && students.find) ? students.find(s => {
-        const sId = extractStudentId(s);
-        return sId.toString().toLowerCase() === scannedData.toLowerCase();
-      }) : null;
-      
-      let finalName = student ? extractStudentName(student) : "User Luar (Platform Lain)";
-      let finalId = scannedData;
-
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('en-CA');
-      const timeStr = now.toTimeString().slice(0, 5);
-      
-      const alreadyToday = (attendanceData && attendanceData.find) ? attendanceData.find(r => {
-        const rId = (r.student_id || r.id || r.Id || r.ID || "").toString().trim().toLowerCase();
-        return rId === finalId.toLowerCase() && r.date === dateStr;
-      }) : null;
-
-      if (alreadyToday) { 
-        showScanError('ID: ' + finalId + ' sudah melakukan absensi hari ini.'); 
-        return; 
-      }
-
-      const newRecord = { action: 'addAttendance', id: finalId, name: finalName, date: dateStr, time: timeStr, status: 'Hadir' };
-
-      document.getElementById('scan-result').classList.remove('hidden');
-      document.getElementById('scan-result-text').textContent = `Menyimpan data ${finalId}...`;
-
-      try {
-        const response = await fetch(SCRIPT_URL, {
-          method: 'POST',
-          body: JSON.stringify(newRecord)
-        });
-        const resData = await response.json();
-        
-        if (resData.status === 'success') {
-          document.getElementById('scan-result-text').textContent = `✓ Berhasil Absen: ${finalId} (${finalName})`;
-          
-          attendanceData.push({
-            student_id: finalId,
-            student_name: finalName,
-            name: finalName,
-            date: dateStr,
-            time: timeStr,
-            status: 'Hadir'
-          });
-
-          renderReport(); 
-          renderStudentList();
-          
-          setTimeout(() => { syncDataFromSpreadsheet(); }, 1500);
-        } else {
-          showScanError('Gagal menyimpan ke Spreadsheet.');
-        }
-      } catch (err) {
-        showScanError('Koneksi internet bermasalah.');
-      }
-    }
-
-    function showScanError(msg) {
-      document.getElementById('scan-result').classList.add('hidden');
-      document.getElementById('scan-error').classList.remove('hidden');
-      document.getElementById('scan-error-text').textContent = msg;
-    }
-
-    async function editStudent(id, currentName) {
-      const newName = prompt(`Ubah nama untuk ID ${id}:`, currentName);
-      if (newName === null) return;
-      const trimmedName = newName.trim();
-      if (!trimmedName) { alert("Nama tidak boleh kosong!"); return; }
-
-      try {
-        const response = await fetch(SCRIPT_URL, {
-          method: 'POST',
-          body: JSON.stringify({ action: 'editStudent', id: id, newName: trimmedName })
-        });
-        const resData = await response.json();
-        if (resData.status === 'success') {
-          alert('Data nama siswa berhasil diubah!');
-          await syncDataFromSpreadsheet();
-        } else { alert('Gagal mengubah data.'); }
-      } catch (err) { alert('Gagal tersambung ke server.'); }
-    }
-
-    async function deleteStudent(id, name) {
-      if (!confirm(`Apakah Anda yakin ingin menghapus ${name}?`)) return;
-      try {
-        const response = await fetch(SCRIPT_URL, {
-          method: 'POST',
-          body: JSON.stringify({ action: 'deleteStudent', id: id })
-        });
-        const resData = await response.json();
-        if (resData.status === 'success') {
-          alert('Siswa berhasil dihapus!');
-          await syncDataFromSpreadsheet();
-        } else { alert('Gagal menghapus data.'); }
-      } catch (err) { alert('Gagal tersambung ke server.'); }
-    }
-
-    // PROSES FILTER & RENDER DATA SISWA
-    // PROSES FILTER & RENDER DATA SISWA
-    function renderStudentList() {
-      const container = document.getElementById('student-list');
-      const kelasFilterElement = document.getElementById('filter-kelas');
-      if (!container || !kelasFilterElement) return;
-      
-      const kelasFilter = kelasFilterElement.value.toString().replace(/\s+/g, '').trim().toLowerCase();
-      container.innerHTML = '';
-      
-      // JIKA DATABASE KOSONG
-      if (!students || students.length === 0) {
-        container.innerHTML = `
-          <div class="p-4 bg-gray-50 border border-gray-200 rounded-xl text-center text-gray-500 text-sm">
-            Belum ada data siswa yang dimuat.
-          </div>`;
-        return;
-      }
-
-      // Filter teks murni
-      const filteredStudents = students.filter(s => {
-        if (kelasFilter === 'all') return true;
-        let studentKelas = extractStudentKelas(s).toLowerCase();
-        return studentKelas === kelasFilter;
-      });
-
-      // NOTIFIKASI MINIMALIS JIKA DATA TIDAK DITEMUKAN
-      if (filteredStudents.length === 0) {
-        container.innerHTML = `
-          <div class="py-12 text-center text-gray-400">
-            <i data-lucide="folder-open" class="w-8 h-8 mx-auto mb-2 stroke-1"></i>
-            <p class="text-sm">Tidak ada data siswa di Kelas ${kelasFilterElement.value}</p>
-          </div>`;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-        return;
-      }
-
-      const printInfo = document.getElementById('print-kelas-info');
-      if (printInfo) {
-        printInfo.textContent = `Kelas: ${kelasFilter === 'all' ? 'Semua Kelas' : kelasFilterElement.value}`;
-      }
-
-      // Render elemen siswa yang lolos filter
-      filteredStudents.forEach(s => {
-        const studentKelas = extractStudentKelas(s);
-        const studentName = extractStudentName(s);
-        const studentId = extractStudentId(s);
-        const div = document.createElement('div');
-        
-        div.className = 'flex items-center gap-4 p-3 bg-white rounded-lg shadow-sm border print:shadow-none print:border-gray-300 print:break-inside-avoid';
-        div.innerHTML = `
-          <canvas id="qr-${studentId}" class="w-16 h-16 bg-gray-50 p-1 rounded border border-gray-200 print:w-20 print:h-20 shrink-0"></canvas>
-          <div class="flex-1 min-w-0">
-            <p class="font-semibold text-sm text-gray-800 truncate print:text-base">${studentName}</p>
-            <p class="text-xs text-gray-500 font-mono truncate">ID: ${studentId}</p>
-            ${studentKelas ? `<p class="text-[10px] mt-0.5 inline-block bg-slate-100 text-slate-700 font-medium px-1.5 py-0.5 rounded print:border print:text-xs">${studentKelas}</p>` : ''}
-          </div>
-          <div class="flex gap-1 no-print">
-            <button onclick="editStudent('${studentId}', '${studentName}')" class="text-blue-600 hover:bg-blue-50 p-2 rounded transition" title="Edit Nama">
-              <i data-lucide="pencil" class="w-4 h-4"></i>
-            </button>
-            <button onclick="deleteStudent('${studentId}', '${studentName}')" class="text-red-500 hover:bg-red-50 p-2 rounded transition" title="Hapus Siswa">
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
-            </button>
-          </div>
-        `;
-        container.appendChild(div);
-        
-        setTimeout(() => {
-          const qrCanvas = document.getElementById('qr-' + studentId);
-          if (qrCanvas) { QRCode.toCanvas(qrCanvas, studentId.toString(), { width: 80, margin: 1 }); }
-        }, 50);
-      });
-      if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-    function printQRCodeSiswa() { window.print(); }
-
-    function renderReport() {
-      const tanggalDipilih = document.getElementById('filter-date').value;
-      const kelasDipilihElement = document.getElementById('filter-laporan-kelas');
-      if (!kelasDipilihElement) return;
-
-      const kelasDipilih = kelasDipilihElement.value.toString().replace(/\s+/g, '').trim().toLowerCase();
-      const body = document.getElementById('report-body');
-      const emptyText = document.getElementById('report-empty');
-      
-      body.innerHTML = '';
-      if (!kelasDipilih) {
-        emptyText.classList.remove('hidden');
-        emptyText.textContent = "Silahkan pilih kelas terlebih dahulu untuk menampilkan data.";
-        return;
-      }
-      
-      if (!attendanceData || attendanceData.length === 0) { 
-        emptyText.classList.remove('hidden'); 
-        emptyText.textContent = "Belum ada riwayat data absensi sama sekali.";
-        return; 
-      }
-      
-      let filteredData = attendanceData.filter(r => {
-        if (!r.date) return false;
-        const rDate = r.date.toString().split('T')[0].trim();
-        return rDate.includes(tanggalDipilih) || tanggalDipilih.includes(rDate);
-      });
-      
-      filteredData = filteredData.filter(r => {
-        const rId = (r.student_id || r.id || r.Id || r.ID || "").toString().trim().toLowerCase();
-        if (!rId) return false;
-        
-        const dataSiswa = students.find(s => extractStudentId(s).toString().trim().toLowerCase() === rId);
-        const kelasSiswa = extractStudentKelas(dataSiswa).toLowerCase();
-        return kelasSiswa === kelasDipilih;
-      });
-
-      if (filteredData.length === 0) { 
-        emptyText.classList.remove('hidden'); 
-        emptyText.textContent = `Tidak ada data absensi untuk Kelas ${kelasDipilihElement.value} pada tanggal ${tanggalDipilih}.`;
-        return; 
-      }
-      
-      emptyText.classList.add('hidden');
-      
-      filteredData.forEach(r => {
-        const rId = (r.student_id || r.id || r.Id || r.ID || "-");
-        const dataSiswa = students.find(s => extractStudentId(s).toString().trim().toLowerCase() === rId.toString().trim().toLowerCase());
-        const kelasSiswa = extractStudentKelas(dataSiswa) || "-";
-        const namaSiswa = r.student_name || r.name || (dataSiswa ? extractStudentName(dataSiswa) : "Tanpa Nama");
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="p-2 border font-mono font-bold">${rId}</td>
-          <td class="p-2 border">${namaSiswa}</td>
-          <td class="p-2 border"><span class="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-medium">${kelasSiswa}</span></td>
-          <td class="p-2 border">${r.time || "-"}</td>
-          <td class="p-2 border"><span class="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-semibold">${r.status || "Hadir"}</span></td>
-        `;
-        body.appendChild(tr);
-      });
-    }
-
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  </script> 
- </body>
+  loadData();
+})();
+</script>
+</body>
 </html>
