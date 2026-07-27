@@ -537,7 +537,7 @@
           <h2>Koneksi Google Spreadsheet</h2>
           <div class="field">
             <label>URL Apps Script (Web App Endpoint)</label>
-            <input id="set-gas-url" placeholder="https://script.google.com/macros/s/AKfycbxbFt3DlV4knqMEJQU2k6kVYGidHhYDiRly5bVM3Ey6G0d8RSDldb1EJ_ha9W-QZrQ4zA/exec">
+            <input id="set-gas-url" placeholder="https://script.google.com/macros/s/AKfycbwed4CbiBIQTeAqtvzDN4barWKXXEiq-6rklFCIYWBRca5shuxdTZm_AFGmk7F3-AlT6Q/exec">
           </div>
           <button class="btn btn-gold" id="btn-simpan-gas">Simpan & Sinkronkan</button>
         </div>
@@ -628,53 +628,84 @@
   }
 
 async function syncWithGAS(){
-    if(!gasUrl) return false;
-    try {
-      const res = await fetch(gasUrl, { method: "GET", redirect: "follow" });
-      const data = await res.json();
-      if(data){
-        if(Array.isArray(data.students)) DB.students = data.students;
-        if(Array.isArray(data.attendance)) DB.attendance = data.attendance;
-        
-        // Hanya update users JIKA data.users benar-benar berbentuk Array dan TIDAK KOSONG
-        if(Array.isArray(data.users) && data.users.length > 0){
-          const validUsers = data.users.map(u => ({
-            id: u.id || uid(),
-            username: String(u.username || u.Username || u.USER || "").trim(),
-            password: String(u.password || u.Password || "").trim(),
-            nama: u.nama || u.Nama || u.username || "User",
-            role: u.role || u.Role || "Admin"
-          })).filter(u => u.username !== "");
 
-          if(validUsers.length > 0){
-            DB.users = validUsers;
-          }
+    if(!gasUrl) return false;
+
+    try{
+
+        const response = await fetch(
+            gasUrl + "?action=getData"
+        );
+
+        const data = await response.json();
+
+        if(data.success){
+
+            DB.students =
+                data.students || [];
+
+            DB.attendance =
+                data.attendance || [];
+
+            DB.users =
+                data.users || [];
+
+            DB.settings =
+                data.settings || DB.settings;
+
+            saveToLocal();
+
+            return true;
+
         }
-        
-        if(data.settings) DB.settings = Object.assign(DB.settings, data.settings);
-        saveToLocal();
-        return true;
-      }
-    } catch(e) {
-      console.error("Gagal sinkronisasi Google Sheet:", e);
-      // Jangan gagalkan login lokal jika fetch Google Sheet error
+
+    }catch(err){
+
+        console.error(err);
+
+        toast(
+            "Gagal mengambil data",
+            "bad"
+        );
+
     }
+
     return false;
-  }
+
+}
 
   async function pushToGAS(){
-    if(!gasUrl) return;
-    try {
-      await fetch(gasUrl, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(DB)
-      });
-    } catch(e) {
-      console.error("Gagal mengirim ke Google Sheet", e);
+
+    if(!gasUrl) return false;
+
+    try{
+
+        const response = await fetch(gasUrl,{
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                action:"save",
+                data:DB
+            })
+        });
+
+        const result = await response.json();
+
+        if(result.success){
+            return true;
+        }
+
+        return false;
+
+    }catch(err){
+        console.error(err);
+        toast("Sinkronisasi gagal","bad");
+        return false;
     }
-  }
+
+}
 
   function saveToLocal(){
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }catch(e){}
@@ -688,35 +719,71 @@ async function syncWithGAS(){
     }, 400);
   }
 
-// 2. FUNGSI LOAD DATA DENGAN GUARANTEE AKUN ADMIN
-  async function loadData(){
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){
-      try{
-        const parsed = JSON.parse(raw);
-        DB.students = parsed.students || [];
-        DB.attendance = parsed.attendance || [];
-        DB.users = parsed.users || [];
-        DB.settings = Object.assign(DB.settings, parsed.settings || {});
-      }catch(e){}
-    }
+async function loadData(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(raw){
+    try{
+      const parsed = JSON.parse(raw);
+      DB.students = parsed.students || [];
+      DB.attendance = parsed.attendance || [];
+      DB.users = parsed.users || []; // SUDAH DIPERBAIKI
+      DB.settings = Object.assign(DB.settings, parsed.settings || {});
+    }catch(e){}
+  }
 
-    // Coba koneksi ke Google Sheets
     if(gasUrl){
-      await syncWithGAS();
+      toast("Menghubungkan ke Google Sheets...", "");
+     document.getElementById(
+"btn-simpan-gas"
+).addEventListener("click",
+
+async ()=>{
+
+    const url =
+    document.getElementById(
+    "set-gas-url"
+    ).value.trim();
+
+    gasUrl = url;
+
+    localStorage.setItem(
+    GAS_URL_KEY,
+    url
+    );
+
+    if(!url){
+
+        toast(
+        "URL kosong",
+        "bad"
+        );
+
+        return;
+
     }
 
-    // JAMINAN: Jika DB.users kosong (akibat sync gagal / sheet kosong), PAKSA buat akun admin
-    const hasAdmin = DB.users.some(u => u.username.toLowerCase() === "admin");
-    if(!hasAdmin || DB.users.length === 0){
-      DB.users.unshift({ 
-        id: uid(), 
-        username: "admin", 
-        password: hashPass("admin123"), 
-        nama: "Administrator", 
-        role: "Admin" 
-      });
-      saveToLocal();
+    toast(
+    "Sinkronisasi...",
+    ""
+    );
+
+    await pushToGAS();
+
+    await syncWithGAS();
+
+    renderAll();
+
+    toast(
+    "Sinkronisasi berhasil",
+    "ok"
+    );
+
+});
+    }
+
+    if(DB.users.length === 0){
+      DB.users.push({ id: uid(), username:"admin", password: hashPass("admin123"), nama:"Administrator", role:"Admin" });
+      saveData();
     }
 
     await restoreSession();
@@ -759,39 +826,27 @@ async function syncWithGAS(){
   document.getElementById("btn-login").addEventListener("click", doLogin);
   document.getElementById("login-password").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
   document.getElementById("login-username").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
-function doLogin(){
-    const usernameInput = document.getElementById("login-username").value.trim().toLowerCase();
-    const passwordInput = document.getElementById("login-password").value;
+
+  function doLogin(){
+    const username = document.getElementById("login-username").value.trim();
+    const password = document.getElementById("login-password").value;
     const errEl = document.getElementById("login-error");
-
-    if(!usernameInput || !passwordInput){
-      errEl.textContent = "Isi username dan password.";
-      errEl.style.display = "block";
-      return;
-    }
-
-    // Cari user yang cocok
-    const user = DB.users.find(u => {
-      const uName = String(u.username).trim().toLowerCase();
-      const uPass = String(u.password).trim();
-      
-      const matchUser = uName === usernameInput;
-      // Cek apakah password cocok sebagai teks biasa ATAU hasil hash
-      const matchPass = (uPass === passwordInput) || (uPass === hashPass(passwordInput));
-      
-      return matchUser && matchPass;
-    });
-
+    const user = DB.users.find(u=>u.username===username && (u.password===password || u.password===hashPass(password)));
     if(!user){
       errEl.textContent = "Username atau password salah.";
       errEl.style.display = "block";
       return;
     }
-
     try{ localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user.username })); }catch(e){}
     loginSuccess(user);
-    toast("Selamat datang, " + user.nama, "ok");
+    toast("Selamat datang, "+user.nama, "ok");
   }
+
+  document.getElementById("btn-logout").addEventListener("click", ()=>{
+    try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
+    currentUser = null;
+    showLogin();
+  });
 
   function toast(msg, type){
     const root = document.getElementById("toast-root");
