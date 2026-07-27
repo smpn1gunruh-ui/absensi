@@ -283,11 +283,6 @@
     padding:3px 9px;border-radius:20px;border:1px solid var(--line);
   }
 
-  .excel-status-box{
-    font-size:12.5px;color:var(--muted);background:var(--paper);border:1px solid var(--line);
-    border-radius:8px;padding:10px 12px;margin-bottom:12px;line-height:1.5;
-  }
-
   @media print{
     body *{visibility:hidden;}
     #print-area, #print-area *{visibility:visible;}
@@ -537,7 +532,7 @@
           <h2>Koneksi Google Spreadsheet</h2>
           <div class="field">
             <label>URL Apps Script (Web App Endpoint)</label>
-            <input id="set-gas-url" placeholder="https://script.google.com/macros/s/AKfycbxBB6c6XKGan8S6g1JSpLgsHn4IWwYOUsL6_DXxPa4sPPzISSSzfyKiLuYLyMDb4mAK5g/exec">
+            <input id="set-gas-url" placeholder="https://script.google.com/macros/s/.../exec">
           </div>
           <button class="btn btn-gold" id="btn-simpan-gas">Simpan & Sinkronkan</button>
         </div>
@@ -627,85 +622,41 @@
     try{ return btoa(unescape(encodeURIComponent(String(pw)))); }catch(e){ return String(pw); }
   }
 
-async function syncWithGAS(){
-
+  async function syncWithGAS(){
     if(!gasUrl) return false;
-
     try{
-
-        const response = await fetch(
-            gasUrl + "?action=getData"
-        );
-
-        const data = await response.json();
-
-        if(data.success){
-
-            DB.students =
-                data.students || [];
-
-            DB.attendance =
-                data.attendance || [];
-
-            DB.users =
-                data.users || [];
-
-            DB.settings =
-                data.settings || DB.settings;
-
-            saveToLocal();
-
-            return true;
-
-        }
-
+      const response = await fetch(gasUrl + "?action=getData", { method: "GET" });
+      const data = await response.json();
+      if(data && data.success){
+        DB.students = data.students || [];
+        DB.attendance = data.attendance || [];
+        DB.users = data.users || [];
+        DB.settings = Object.assign(DB.settings, data.settings || {});
+        saveToLocal();
+        return true;
+      }
     }catch(err){
-
-        console.error(err);
-
-        toast(
-            "Gagal mengambil data",
-            "bad"
-        );
-
+      console.error("Sync error:", err);
+      toast("Gagal sinkronisasi data dari Spreadsheet", "bad");
     }
-
     return false;
-
-}
+  }
 
   async function pushToGAS(){
-
     if(!gasUrl) return false;
-
     try{
-
-        const response = await fetch(gasUrl,{
-            method:"POST",
-            headers:{
-                "Content-Type":"application/json"
-            },
-            body:JSON.stringify({
-                action:"save",
-                data:DB
-            })
-        });
-
-        const result = await response.json();
-
-        if(result.success){
-            return true;
-        }
-
-        return false;
-
+      const response = await fetch(gasUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" }, // Mencegah preflight CORS error di Apps Script
+        body: JSON.stringify({ action: "save", data: DB })
+      });
+      const result = await response.json();
+      return result && result.success;
     }catch(err){
-        console.error(err);
-        toast("Sinkronisasi gagal","bad");
-        return false;
+      console.error("Push error:", err);
+      return false;
     }
-
-}
+  }
 
   function saveToLocal(){
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }catch(e){}
@@ -714,76 +665,32 @@ async function syncWithGAS(){
   function saveData(){
     saveToLocal();
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(()=>{
-      pushToGAS();
-    }, 400);
+    saveTimer = setTimeout(async ()=>{
+      await pushToGAS();
+    }, 600);
   }
 
-async function loadData(){
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if(raw){
-    try{
-      const parsed = JSON.parse(raw);
-      DB.students = parsed.students || [];
-      DB.attendance = parsed.attendance || [];
-      DB.users = parsed.users || []; // SUDAH DIPERBAIKI
-      DB.settings = Object.assign(DB.settings, parsed.settings || {});
-    }catch(e){}
-  }
-
-    if(gasUrl){
-      toast("Menghubungkan ke Google Sheets...", "");
-     document.getElementById(
-"btn-simpan-gas"
-).addEventListener("click",
-
-async ()=>{
-
-    const url =
-    document.getElementById(
-    "set-gas-url"
-    ).value.trim();
-
-    gasUrl = url;
-
-    localStorage.setItem(
-    GAS_URL_KEY,
-    url
-    );
-
-    if(!url){
-
-        toast(
-        "URL kosong",
-        "bad"
-        );
-
-        return;
-
-    }
-
-    toast(
-    "Sinkronisasi...",
-    ""
-    );
-
-    await pushToGAS();
-
-    await syncWithGAS();
-
-    renderAll();
-
-    toast(
-    "Sinkronisasi berhasil",
-    "ok"
-    );
-
-});
+  async function loadData(){
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      try{
+        const parsed = JSON.parse(raw);
+        DB.students = parsed.students || [];
+        DB.attendance = parsed.attendance || [];
+        DB.users = parsed.users || [];
+        DB.settings = Object.assign(DB.settings, parsed.settings || {});
+      }catch(e){}
     }
 
     if(DB.users.length === 0){
       DB.users.push({ id: uid(), username:"admin", password: hashPass("admin123"), nama:"Administrator", role:"Admin" });
-      saveData();
+      saveToLocal();
+    }
+
+    if(gasUrl){
+      toast("Menghubungkan ke Google Spreadsheet...", "");
+      const ok = await syncWithGAS();
+      if(ok) toast("Berhasil sinkronisasi dengan Spreadsheet", "ok");
     }
 
     await restoreSession();
@@ -898,16 +805,19 @@ async ()=>{
     const targets = ["siswa-filter-kelas","absensi-filter-kelas","lap-kelas","kartu-filter-kelas"];
     targets.forEach(id=>{
       const el = document.getElementById(id);
+      if(!el) return;
       const current = el.value;
       el.innerHTML = '<option value="">Semua Kelas</option>' + kelasList.map(k=>`<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`).join("");
       if(kelasList.includes(current)) el.value = current;
     });
     const lapSiswa = document.getElementById("lap-siswa");
-    const curS = lapSiswa.value;
-    lapSiswa.innerHTML = '<option value="">Semua Siswa</option>' + DB.students
-      .slice().sort((a,b)=>a.nama.localeCompare(b.nama))
-      .map(s=>`<option value="${s.id}">${escapeHtml(s.nama)} (${escapeHtml(s.nis)})</option>`).join("");
-    if(DB.students.find(s=>s.id===curS)) lapSiswa.value = curS;
+    if(lapSiswa){
+      const curS = lapSiswa.value;
+      lapSiswa.innerHTML = '<option value="">Semua Siswa</option>' + DB.students
+        .slice().sort((a,b)=>a.nama.localeCompare(b.nama))
+        .map(s=>`<option value="${s.id}">${escapeHtml(s.nama)} (${escapeHtml(s.nis)})</option>`).join("");
+      if(DB.students.find(s=>s.id===curS)) lapSiswa.value = curS;
+    }
   }
   function escapeHtml(str){
     return String(str).replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
@@ -1431,13 +1341,17 @@ async ()=>{
     const url = document.getElementById("set-gas-url").value.trim();
     gasUrl = url;
     localStorage.setItem(GAS_URL_KEY, url);
+    if(!url){
+      toast("URL Google Script dikosongkan", "");
+      return;
+    }
     toast("Menghubungkan ke Google Sheets...", "");
     const success = await syncWithGAS();
     if(success) {
       toast("Terhubung ke Google Sheets & Data Disinkronkan", "ok");
       renderAll();
-    } else if(!url) {
-      toast("URL Google Script dikosongkan", "");
+    } else {
+      toast("Gagal terhubung, pastikan URL benar & Web App sudah dideploy", "bad");
     }
   });
 
@@ -1503,6 +1417,7 @@ async ()=>{
   /* Kelola User */
   function renderUserTable(){
     const tbody = document.getElementById("user-table");
+    if(!tbody) return;
     if(DB.users.length===0){
       tbody.innerHTML = `<tr><td colspan="4" class="empty-state">Belum ada user.</td></tr>`;
       return;
