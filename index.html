@@ -630,21 +630,25 @@
 async function syncWithGAS(){
     if(!gasUrl) return false;
     try {
-      const res = await fetch(gasUrl);
+      const res = await fetch(gasUrl, { method: "GET", redirect: "follow" });
       const data = await res.json();
       if(data){
         if(Array.isArray(data.students)) DB.students = data.students;
         if(Array.isArray(data.attendance)) DB.attendance = data.attendance;
         
-        // Normalisasi data user dari Spreadsheet
+        // Hanya update users JIKA data.users benar-benar berbentuk Array dan TIDAK KOSONG
         if(Array.isArray(data.users) && data.users.length > 0){
-          DB.users = data.users.map(u => ({
+          const validUsers = data.users.map(u => ({
             id: u.id || uid(),
             username: String(u.username || u.Username || u.USER || "").trim(),
             password: String(u.password || u.Password || "").trim(),
             nama: u.nama || u.Nama || u.username || "User",
             role: u.role || u.Role || "Admin"
           })).filter(u => u.username !== "");
+
+          if(validUsers.length > 0){
+            DB.users = validUsers;
+          }
         }
         
         if(data.settings) DB.settings = Object.assign(DB.settings, data.settings);
@@ -652,8 +656,8 @@ async function syncWithGAS(){
         return true;
       }
     } catch(e) {
-      console.error("Gagal sinkronisasi Google Sheet", e);
-      toast("Gagal memuat data dari Google Sheets", "bad");
+      console.error("Gagal sinkronisasi Google Sheet:", e);
+      // Jangan gagalkan login lokal jika fetch Google Sheet error
     }
     return false;
   }
@@ -684,7 +688,8 @@ async function syncWithGAS(){
     }, 400);
   }
 
-async function loadData(){
+// 2. FUNGSI LOAD DATA DENGAN GUARANTEE AKUN ADMIN
+  async function loadData(){
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
       try{
@@ -696,21 +701,22 @@ async function loadData(){
       }catch(e){}
     }
 
-    // Pastikan minimal ada 1 akun admin default di lokal sebelum sync
-    if(DB.users.length === 0){
-      DB.users.push({ id: uid(), username:"admin", password: hashPass("admin123"), nama:"Administrator", role:"Admin" });
-      saveToLocal();
+    // Coba koneksi ke Google Sheets
+    if(gasUrl){
+      await syncWithGAS();
     }
 
-    if(gasUrl){
-      toast("Menghubungkan ke Google Sheets...", "");
-      await syncWithGAS();
-      
-      // Jika setelah sync ternyata data user di Spreadsheet kosong/rusak, buat kembali akun admin
-      if(!DB.users || DB.users.length === 0){
-        DB.users = [{ id: uid(), username:"admin", password: hashPass("admin123"), nama:"Administrator", role:"Admin" }];
-        saveToLocal();
-      }
+    // JAMINAN: Jika DB.users kosong (akibat sync gagal / sheet kosong), PAKSA buat akun admin
+    const hasAdmin = DB.users.some(u => u.username.toLowerCase() === "admin");
+    if(!hasAdmin || DB.users.length === 0){
+      DB.users.unshift({ 
+        id: uid(), 
+        username: "admin", 
+        password: hashPass("admin123"), 
+        nama: "Administrator", 
+        role: "Admin" 
+      });
+      saveToLocal();
     }
 
     await restoreSession();
@@ -754,30 +760,38 @@ async function loadData(){
   document.getElementById("login-password").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
   document.getElementById("login-username").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
 function doLogin(){
-    const username = document.getElementById("login-username").value.trim();
-    const password = document.getElementById("login-password").value;
+    const usernameInput = document.getElementById("login-username").value.trim().toLowerCase();
+    const passwordInput = document.getElementById("login-password").value;
     const errEl = document.getElementById("login-error");
-    
-    // Mencocokkan username & password (baik berupa plaintext maupun hash)
-    const user = DB.users.find(u => 
-      String(u.username).trim().toLowerCase() === username.toLowerCase() && 
-      (String(u.password) === password || String(u.password) === hashPass(password))
-    );
+
+    if(!usernameInput || !passwordInput){
+      errEl.textContent = "Isi username dan password.";
+      errEl.style.display = "block";
+      return;
+    }
+
+    // Cari user yang cocok
+    const user = DB.users.find(u => {
+      const uName = String(u.username).trim().toLowerCase();
+      const uPass = String(u.password).trim();
+      
+      const matchUser = uName === usernameInput;
+      // Cek apakah password cocok sebagai teks biasa ATAU hasil hash
+      const matchPass = (uPass === passwordInput) || (uPass === hashPass(passwordInput));
+      
+      return matchUser && matchPass;
+    });
+
     if(!user){
       errEl.textContent = "Username atau password salah.";
       errEl.style.display = "block";
       return;
     }
+
     try{ localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user.username })); }catch(e){}
     loginSuccess(user);
-    toast("Selamat datang, "+user.nama, "ok");
+    toast("Selamat datang, " + user.nama, "ok");
   }
-
-  document.getElementById("btn-logout").addEventListener("click", ()=>{
-    try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
-    currentUser = null;
-    showLogin();
-  });
 
   function toast(msg, type){
     const root = document.getElementById("toast-root");
