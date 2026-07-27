@@ -340,7 +340,7 @@
       </button>
     </nav>
     <div class="sidebar-foot">
-      Data tersimpan otomatis di penyimpanan artifact ini.<br>
+      Terhubung ke Google Spreadsheet.<br>
       <span id="side-count-students">0</span> siswa terdaftar.
     </div>
   </aside>
@@ -534,6 +534,15 @@
       <!-- PENGATURAN -->
       <section class="view" id="view-pengaturan">
         <div class="panel" style="max-width:420px;">
+          <h2>Koneksi Google Spreadsheet</h2>
+          <div class="field">
+            <label>URL Apps Script (Web App Endpoint)</label>
+            <input id="set-gas-url" placeholder="https://script.google.com/macros/s/AKfycbzjoCG4FeTLqFa9O0PohGiRXN2NyD9h7w2PH0RvOxpEO8rPAKO3XhVffyxwrQ08mDX4bA/exec">
+          </div>
+          <button class="btn btn-gold" id="btn-simpan-gas">Simpan & Sinkronkan</button>
+        </div>
+
+        <div class="panel" style="max-width:420px;">
           <h2>Akun Saya</h2>
           <div class="field"><label>Nama Tampilan</label><input id="me-nama"></div>
           <div class="field"><label>Username</label><input id="me-username"></div>
@@ -542,18 +551,6 @@
             <div class="field"><label>Ulangi Password</label><input type="password" id="me-password2"></div>
           </div>
           <button class="btn btn-primary" id="btn-simpan-akun">Simpan Akun</button>
-        </div>
-
-        <div class="panel" style="max-width:420px;">
-          <h2>Database Excel <span class="tag">opsional</span></h2>
-          <div class="excel-status-box" id="excel-db-status">Memeriksa dukungan browser...</div>
-          <div class="toolbar-left" style="margin-bottom:4px;">
-            <button class="btn btn-primary btn-sm" id="btn-excel-new">Buat File Baru</button>
-            <button class="btn btn-ghost btn-sm" id="btn-excel-open">Buka File Excel</button>
-            <button class="btn btn-gold btn-sm" id="btn-excel-reconnect" style="display:none;">Sambungkan Ulang</button>
-            <button class="btn btn-danger btn-sm" id="btn-excel-disconnect" style="display:none;">Putuskan Koneksi</button>
-          </div>
-          <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0 0;line-height:1.5;">Jika terhubung, data siswa, absensi, user, dan pengaturan otomatis disimpan langsung ke file .xlsx tersebut setiap ada perubahan. Butuh Chrome/Edge versi terbaru.</p>
         </div>
 
         <div class="panel" style="max-width:420px;">
@@ -597,37 +594,8 @@
 
   const STORAGE_KEY = "absensi-app-data";
   const SESSION_KEY = "absensi-session";
+  const GAS_URL_KEY = "absensi-gas-url";
 
-  /* Lapisan penyimpanan: pakai window.storage jika tersedia (mis. saat pratinjau
-     di Claude.ai), jika tidak (file dibuka langsung di browser / desktop) pakai
-     localStorage sebagai cadangan supaya data tetap tersimpan di perangkat ini. */
-  const Store = {
-    hasCloud(){ return typeof window.storage !== "undefined" && window.storage && typeof window.storage.set === "function"; },
-    async get(key){
-      if(this.hasCloud()){
-        try{ return await window.storage.get(key, false); }
-        catch(e){ return null; }
-      }
-      const raw = localStorage.getItem(key);
-      return raw === null ? null : { key, value: raw, shared:false };
-    },
-    async set(key, value){
-      if(this.hasCloud()){
-        try{ return await window.storage.set(key, value, false); }
-        catch(e){ console.error(e); return null; }
-      }
-      try{ localStorage.setItem(key, value); return { key, value, shared:false }; }
-      catch(e){ console.error(e); return null; }
-    },
-    async delete(key){
-      if(this.hasCloud()){
-        try{ return await window.storage.delete(key, false); }
-        catch(e){ return null; }
-      }
-      localStorage.removeItem(key);
-      return { key, deleted:true, shared:false };
-    }
-  };
   let DB = {
     students: [],
     attendance: [],
@@ -638,9 +606,7 @@
   let html5Qr = null;
   let camActive = false;
   let currentUser = null;
-  let excelHandle = null;
-  let pendingExcelHandle = null;
-  let excelWriteTimer = null;
+  let gasUrl = localStorage.getItem(GAS_URL_KEY) || "";
 
   function todayISO(){
     const d = new Date();
@@ -661,271 +627,87 @@
     try{ return btoa(unescape(encodeURIComponent(String(pw)))); }catch(e){ return String(pw); }
   }
 
-  /* ---------- IndexedDB: simpan referensi file Excel supaya bisa otomatis
-     tersambung lagi tiap kali aplikasi dibuka, tanpa perlu pilih file ulang ---------- */
-  const FileDB = {
-    _dbp: null,
-    open(){
-      if(this._dbp) return this._dbp;
-      this._dbp = new Promise((resolve,reject)=>{
-        const req = indexedDB.open("absensi-filehandle-db", 1);
-        req.onupgradeneeded = ()=>{ req.result.createObjectStore("handles"); };
-        req.onsuccess = ()=>resolve(req.result);
-        req.onerror = ()=>reject(req.error);
-      });
-      return this._dbp;
-    },
-    async setHandle(handle){
-      const db = await this.open();
-      return new Promise((resolve,reject)=>{
-        const tx = db.transaction("handles","readwrite");
-        tx.objectStore("handles").put(handle,"dbFile");
-        tx.oncomplete = ()=>resolve();
-        tx.onerror = ()=>reject(tx.error);
-      });
-    },
-    async getHandle(){
-      const db = await this.open();
-      return new Promise((resolve,reject)=>{
-        const tx = db.transaction("handles","readonly");
-        const req = tx.objectStore("handles").get("dbFile");
-        req.onsuccess = ()=>resolve(req.result || null);
-        req.onerror = ()=>reject(req.error);
-      });
-    },
-    async clearHandle(){
-      const db = await this.open();
-      return new Promise((resolve,reject)=>{
-        const tx = db.transaction("handles","readwrite");
-        tx.objectStore("handles").delete("dbFile");
-        tx.oncomplete = ()=>resolve();
-        tx.onerror = ()=>reject(tx.error);
-      });
-    }
-  };
-
-  /* ---------- ExcelDB: file .xlsx sebagai database utama ---------- */
-  function excelSupported(){ return typeof window.showSaveFilePicker === "function"; }
-
-  function buildWorkbookFromDB(){
-    const wb = XLSX.utils.book_new();
-    const wsSiswa = XLSX.utils.json_to_sheet(DB.students.map(s=>({ ID:s.id, NIS:s.nis, Nama:s.nama, Kelas:s.kelas||"", JK:s.jk||"" })));
-    XLSX.utils.book_append_sheet(wb, wsSiswa, "Siswa");
-    const wsAbsensi = XLSX.utils.json_to_sheet(DB.attendance.map(a=>({ ID:a.id, StudentID:a.studentId, Tanggal:a.tanggal, Waktu:a.waktu, Status:a.status })));
-    XLSX.utils.book_append_sheet(wb, wsAbsensi, "Absensi");
-    const wsUsers = XLSX.utils.json_to_sheet(DB.users.map(u=>({ ID:u.id, Username:u.username, Nama:u.nama, Role:u.role, PasswordHash:u.password })));
-    XLSX.utils.book_append_sheet(wb, wsUsers, "Users");
-    const wsSettings = XLSX.utils.json_to_sheet([
-      { Key:"namaSekolah", Value:DB.settings.namaSekolah },
-      { Key:"jamMasuk", Value:DB.settings.jamMasuk },
-      { Key:"batasTerlambat", Value:DB.settings.batasTerlambat }
-    ]);
-    XLSX.utils.book_append_sheet(wb, wsSettings, "Pengaturan");
-    return wb;
-  }
-
-  function loadDBFromWorkbook(wb){
-    const getSheet = (name)=> wb.Sheets[name] ? XLSX.utils.sheet_to_json(wb.Sheets[name], { defval:"" }) : [];
-    DB.students = getSheet("Siswa").map(r=>({
-      id: String(r.ID || uid()), nis:String(r.NIS||"").trim(), nama:String(r.Nama||"").trim(),
-      kelas:String(r.Kelas||"").trim(), jk:String(r.JK||"").trim()
-    })).filter(s=>s.nis && s.nama);
-    DB.attendance = getSheet("Absensi").map(r=>({
-      id:String(r.ID || uid()), studentId:String(r.StudentID||""), tanggal:String(r.Tanggal||""),
-      waktu:String(r.Waktu||""), status:String(r.Status||"")
-    })).filter(a=>a.studentId && a.tanggal);
-    DB.users = getSheet("Users").map(r=>({
-      id:String(r.ID || uid()), username:String(r.Username||"").trim(), nama:String(r.Nama||"").trim(),
-      role:String(r.Role||"Operator").trim() || "Operator", password:String(r.PasswordHash||"")
-    })).filter(u=>u.username);
-    getSheet("Pengaturan").forEach(r=>{
-      const key = String(r.Key||"").trim();
-      if(key && Object.prototype.hasOwnProperty.call(DB.settings, key)) DB.settings[key] = String(r.Value ?? "");
-    });
-  }
-
-  async function writeExcelFile(){
-    if(!excelHandle) return;
-    try{
-      const wb = buildWorkbookFromDB();
-      const buf = XLSX.write(wb, { type:"array", bookType:"xlsx" });
-      const writable = await excelHandle.createWritable();
-      await writable.write(buf);
-      await writable.close();
-    }catch(e){
-      console.error("Gagal menulis ke file Excel", e);
-      toast("Gagal menyimpan ke file Excel","bad");
-    }
-  }
-  function scheduleExcelWrite(){
-    clearTimeout(excelWriteTimer);
-    excelWriteTimer = setTimeout(writeExcelFile, 400);
-  }
-
-  async function connectNewExcel(){
-    if(!excelSupported()){ toast("Browser ini tidak mendukung koneksi file Excel langsung","bad"); return; }
-    try{
-      const handle = await window.showSaveFilePicker({
-        suggestedName: "database-absensi.xlsx",
-        types: [{ description:"Excel Workbook", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }]
-      });
-      excelHandle = handle;
-      pendingExcelHandle = null;
-      await FileDB.setHandle(handle).catch(()=>{});
-      if(DB.users.length === 0){
-        DB.users.push({ id:uid(), username:"admin", password:hashPass("admin123"), nama:"Administrator", role:"Admin" });
+  async function syncWithGAS(){
+    if(!gasUrl) return false;
+    try {
+      const res = await fetch(gasUrl);
+      const data = await res.json();
+      if(data){
+        if(data.students) DB.students = data.students;
+        if(data.attendance) DB.attendance = data.attendance;
+        if(data.users && data.users.length > 0) DB.users = data.users;
+        if(data.settings) DB.settings = Object.assign(DB.settings, data.settings);
+        saveToLocal();
+        return true;
       }
-      await writeExcelFile();
-      updateExcelStatus();
-      toast("File Excel baru dibuat dan terhubung sebagai database","ok");
-    }catch(e){ if(e.name !== "AbortError"){ console.error(e); toast("Gagal membuat file Excel","bad"); } }
+    } catch(e) {
+      console.error("Gagal sinkronisasi Google Sheet", e);
+      toast("Gagal memuat data dari Google Sheets", "bad");
+    }
+    return false;
   }
 
-  async function connectExistingExcel(){
-    if(!excelSupported()){ toast("Browser ini tidak mendukung koneksi file Excel langsung","bad"); return; }
-    try{
-      const [handle] = await window.showOpenFilePicker({
-        types: [{ description:"Excel Workbook", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }],
-        multiple:false
+  async function pushToGAS(){
+    if(!gasUrl) return;
+    try {
+      await fetch(gasUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(DB)
       });
-      const perm = await handle.requestPermission({ mode:"readwrite" });
-      if(perm !== "granted"){ toast("Izin akses file ditolak","bad"); return; }
-      const file = await handle.getFile();
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type:"array" });
-      loadDBFromWorkbook(wb);
-      if(DB.users.length === 0){
-        DB.users.push({ id:uid(), username:"admin", password:hashPass("admin123"), nama:"Administrator", role:"Admin" });
-      }
-      excelHandle = handle;
-      pendingExcelHandle = null;
-      await FileDB.setHandle(handle).catch(()=>{});
-      saveData();
-      renderAll();
-      updateExcelStatus();
-      toast("Database Excel terhubung","ok");
-    }catch(e){ if(e.name !== "AbortError"){ console.error(e); toast("Gagal membuka file Excel","bad"); } }
-  }
-
-  async function disconnectExcel(){
-    excelHandle = null;
-    pendingExcelHandle = null;
-    await FileDB.clearHandle().catch(()=>{});
-    updateExcelStatus();
-    toast("Koneksi database Excel diputus, kembali memakai penyimpanan browser","ok");
-  }
-
-  async function reconnectPendingExcel(){
-    if(!pendingExcelHandle) return;
-    try{
-      const perm = await pendingExcelHandle.requestPermission({ mode:"readwrite" });
-      if(perm !== "granted"){ toast("Izin akses file ditolak","bad"); return; }
-      const file = await pendingExcelHandle.getFile();
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type:"array" });
-      loadDBFromWorkbook(wb);
-      excelHandle = pendingExcelHandle;
-      pendingExcelHandle = null;
-      saveData(); renderAll(); updateExcelStatus();
-      toast("Berhasil tersambung kembali ke file Excel","ok");
-    }catch(e){ console.error(e); toast("Gagal menyambungkan ulang","bad"); }
-  }
-
-  async function tryAutoReconnectExcel(){
-    if(!excelSupported()) return;
-    try{
-      const handle = await FileDB.getHandle();
-      if(!handle) return;
-      const perm = await handle.queryPermission({ mode:"readwrite" });
-      if(perm === "granted"){
-        const file = await handle.getFile();
-        const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type:"array" });
-        loadDBFromWorkbook(wb);
-        excelHandle = handle;
-      } else {
-        pendingExcelHandle = handle;
-      }
-    }catch(e){ console.warn("Auto-sambung file Excel gagal", e); }
-  }
-
-  function updateExcelStatus(){
-    const el = document.getElementById("excel-db-status");
-    const btnNew = document.getElementById("btn-excel-new");
-    const btnOpen = document.getElementById("btn-excel-open");
-    const btnReconnect = document.getElementById("btn-excel-reconnect");
-    const btnDisconnect = document.getElementById("btn-excel-disconnect");
-    if(!el) return;
-    if(!excelSupported()){
-      el.textContent = "Browser ini tidak mendukung koneksi file Excel langsung (pakai Chrome/Edge versi terbaru). Data disimpan di penyimpanan browser, gunakan tombol Impor/Ekspor Excel di Data Siswa & Laporan sebagai gantinya.";
-      [btnNew,btnOpen,btnReconnect,btnDisconnect].forEach(b=>{ if(b) b.style.display="none"; });
-      return;
-    }
-    if(excelHandle){
-      el.textContent = "✓ Terhubung ke file: " + (excelHandle.name || "database-absensi.xlsx") + ". Setiap perubahan otomatis tersimpan ke file ini.";
-      btnNew.style.display="none"; btnOpen.style.display="none";
-      btnReconnect.style.display="none"; btnDisconnect.style.display="inline-flex";
-    } else if(pendingExcelHandle){
-      el.textContent = "Sebelumnya terhubung ke \"" + (pendingExcelHandle.name||"file Excel") + "\" — klik Sambungkan Ulang untuk memberi izin akses kembali.";
-      btnNew.style.display="inline-flex"; btnOpen.style.display="inline-flex";
-      btnReconnect.style.display="inline-flex"; btnDisconnect.style.display="none";
-    } else {
-      el.textContent = "Belum terhubung ke file Excel. Data saat ini disimpan di penyimpanan browser.";
-      btnNew.style.display="inline-flex"; btnOpen.style.display="inline-flex";
-      btnReconnect.style.display="none"; btnDisconnect.style.display="none";
+    } catch(e) {
+      console.error("Gagal mengirim ke Google Sheet", e);
     }
   }
 
-  document.getElementById("btn-excel-new").addEventListener("click", connectNewExcel);
-  document.getElementById("btn-excel-open").addEventListener("click", connectExistingExcel);
-  document.getElementById("btn-excel-reconnect").addEventListener("click", reconnectPendingExcel);
-  document.getElementById("btn-excel-disconnect").addEventListener("click", disconnectExcel);
+  function saveToLocal(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }catch(e){}
+  }
 
-  async function loadData(){
+  function saveData(){
+    saveToLocal();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(()=>{
+      pushToGAS();
+    }, 400);
+  }
+
+async function loadData(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(raw){
     try{
-      const res = await Store.get(STORAGE_KEY);
-      if(res && res.value){
-        const parsed = JSON.parse(res.value);
-        DB.students = parsed.students || [];
-        DB.attendance = parsed.attendance || [];
-        DB.users = parsed.users || [];
-        DB.settings = Object.assign(DB.settings, parsed.settings || {});
-      }
-    }catch(e){
-      console.log("Belum ada data tersimpan, memulai baru.", e);
+      const parsed = JSON.parse(raw);
+      DB.students = parsed.students || [];
+      DB.attendance = parsed.attendance || [];
+      DB.users = parsed.users || []; // SUDAH DIPERBAIKI
+      DB.settings = Object.assign(DB.settings, parsed.settings || {});
+    }catch(e){}
+  }
+
+    if(gasUrl){
+      toast("Menghubungkan ke Google Sheets...", "");
+      await syncWithGAS();
     }
-    await tryAutoReconnectExcel();
+
     if(DB.users.length === 0){
       DB.users.push({ id: uid(), username:"admin", password: hashPass("admin123"), nama:"Administrator", role:"Admin" });
       saveData();
     }
-    updateExcelStatus();
+
     await restoreSession();
     renderAll();
   }
 
-  function saveData(){
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(async ()=>{
-      try{
-        await Store.set(STORAGE_KEY, JSON.stringify(DB));
-      }catch(e){
-        toast("Gagal menyimpan data", "bad");
-        console.error(e);
-      }
-    }, 200);
-    if(excelHandle) scheduleExcelWrite();
-  }
-
   async function restoreSession(){
-    try{
-      const res = await Store.get(SESSION_KEY);
-      if(res && res.value){
-        const { username } = JSON.parse(res.value);
+    const raw = localStorage.getItem(SESSION_KEY);
+    if(raw){
+      try{
+        const { username } = JSON.parse(raw);
         const user = DB.users.find(u=>u.username===username);
         if(user){ loginSuccess(user); return; }
-      }
-    }catch(e){ /* belum ada sesi */ }
+      }catch(e){}
+    }
     showLogin();
   }
 
@@ -958,23 +740,19 @@
     const username = document.getElementById("login-username").value.trim();
     const password = document.getElementById("login-password").value;
     const errEl = document.getElementById("login-error");
-    const user = DB.users.find(u=>u.username===username && u.password===hashPass(password));
+    const user = DB.users.find(u=>u.username===username && (u.password===password || u.password===hashPass(password)));
     if(!user){
       errEl.textContent = "Username atau password salah.";
       errEl.style.display = "block";
       return;
     }
-    try{
-      Store.set(SESSION_KEY, JSON.stringify({ username: user.username })).catch(()=>{});
-    }catch(e){
-      console.warn("Sesi tidak dapat disimpan (mode file lokal), tetap lanjut login.", e);
-    }
+    try{ localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user.username })); }catch(e){}
     loginSuccess(user);
     toast("Selamat datang, "+user.nama, "ok");
   }
 
   document.getElementById("btn-logout").addEventListener("click", ()=>{
-    try{ Store.delete(SESSION_KEY).catch(()=>{}); }catch(e){}
+    try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
     currentUser = null;
     showLogin();
   });
@@ -988,7 +766,7 @@
     setTimeout(()=>{ el.remove(); }, 2600);
   }
 
-  /* ---------- Navigation ---------- */
+  /* Navigation */
   const titles = {
     dashboard: ["Dashboard","Ringkasan kehadiran hari ini"],
     siswa: ["Data Siswa","Kelola data dan barcode siswa"],
@@ -996,7 +774,7 @@
     laporan: ["Laporan","Rekap dan riwayat kehadiran siswa"],
     kartu: ["Cetak Kartu","Kartu barcode siswa siap cetak"],
     user: ["Kelola User","Atur akun yang dapat mengakses sistem"],
-    pengaturan: ["Pengaturan","Atur jam masuk dan preferensi sistem"]
+    pengaturan: ["Pengaturan","Atur Google Sheets dan jam masuk"]
   };
   document.getElementById("nav").addEventListener("click", (e)=>{
     const btn = e.target.closest(".nav-btn");
@@ -1017,10 +795,9 @@
     if(v === "user") renderUserTable();
   });
 
-  const chip = document.getElementById("today-chip");
-  chip.textContent = fmtTanggal(todayISO());
+  document.getElementById("today-chip").textContent = fmtTanggal(todayISO());
 
-  /* ---------- Kelas helpers ---------- */
+  /* Kelas helpers */
   function getKelasList(){
     const set = new Set(DB.students.map(s=>s.kelas).filter(Boolean));
     return Array.from(set).sort();
@@ -1045,7 +822,6 @@
     return String(str).replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
   }
 
-  /* ---------- Attendance status determination ---------- */
   function determineStatus(waktu){
     const [h,m] = DB.settings.batasTerlambat.split(":").map(Number);
     const [wh,wm] = waktu.split(":").map(Number);
@@ -1091,7 +867,7 @@
     }
   });
 
-  /* ---------- Camera scanning ---------- */
+  /* Camera scanning */
   const camBtn = document.getElementById("btn-toggle-cam");
   camBtn.addEventListener("click", ()=>{
     if(camActive) stopCamera(); else startCamera();
@@ -1125,7 +901,7 @@
     camBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> Gunakan Kamera';
   }
 
-  /* ---------- Render: Dashboard ---------- */
+  /* Render: Dashboard */
   function renderDashboard(){
     const today = todayISO();
     const todaysRecords = DB.attendance.filter(a=>a.tanggal===today);
@@ -1175,7 +951,7 @@
     document.getElementById("side-count-students").textContent = DB.students.length;
   }
 
-  /* ---------- Render: Siswa ---------- */
+  /* Render: Siswa */
   function renderSiswaTable(){
     const search = document.getElementById("siswa-search").value.trim().toLowerCase();
     const kelasFilter = document.getElementById("siswa-filter-kelas").value;
@@ -1208,7 +984,7 @@
         if(!el) return;
         try{
           JsBarcode(el, s.nis, { format:"CODE128", displayValue:false, height:30, margin:0, width:1.4 });
-        }catch(e){ console.error("Gagal membuat barcode untuk", s.nis, e); }
+        }catch(e){ console.error("Gagal membuat barcode", s.nis, e); }
       });
     }
   }
@@ -1243,7 +1019,7 @@
 
   document.getElementById("btn-add-siswa").addEventListener("click", ()=>openSiswaModal(null));
 
-  /* ---------- Excel: template & import/export siswa ---------- */
+  /* Excel template & import/export */
   document.getElementById("btn-template-excel").addEventListener("click", ()=>{
     const ws = XLSX.utils.json_to_sheet([
       { NIS:"10001", Nama:"Contoh Siswa Satu", Kelas:"10-A", JK:"L" },
@@ -1349,7 +1125,7 @@
     };
   }
 
-  /* ---------- Render: Absensi table ---------- */
+  /* Render: Absensi table */
   function renderAbsensiTable(){
     const today = todayISO();
     const kelasFilter = document.getElementById("absensi-filter-kelas").value;
@@ -1363,7 +1139,6 @@
     tbody.innerHTML = list.map(s=>{
       const rec = DB.attendance.find(a=>a.studentId===s.id && a.tanggal===today);
       const status = rec ? rec.status : "Belum";
-      const badgeMap = { Hadir:"badge-hadir", Terlambat:"badge-terlambat", Izin:"badge-izin", Sakit:"badge-sakit", Alpha:"badge-alpha", Belum:"badge-belum" };
       return `<tr>
         <td class="mono">${escapeHtml(s.nis)}</td>
         <td>${escapeHtml(s.nama)}</td>
@@ -1395,7 +1170,7 @@
     toast("Status diperbarui","ok");
   });
 
-  /* ---------- Render: Laporan ---------- */
+  /* Render: Laporan */
   function renderLaporan(){
     const dari = document.getElementById("lap-dari").value || "0000-01-01";
     const sampai = document.getElementById("lap-sampai").value || "9999-12-31";
@@ -1514,7 +1289,7 @@
     window.print();
   });
 
-  /* ---------- Render: Kartu ---------- */
+  /* Render: Kartu */
   function renderKartu(){
     const kelasFilter = document.getElementById("kartu-filter-kelas").value;
     let list = DB.students.slice().sort((a,b)=>a.nama.localeCompare(b.nama));
@@ -1536,7 +1311,7 @@
     list.forEach(s=>{
       const el = document.getElementById(`kc-${s.id}`);
       if(!el) return;
-      try{ JsBarcode(el, s.nis, { format:"CODE128", displayValue:false, height:40, margin:4, width:1.6 }); }catch(e){ console.error("Gagal membuat barcode kartu untuk", s.nis, e); }
+      try{ JsBarcode(el, s.nis, { format:"CODE128", displayValue:false, height:40, margin:4, width:1.6 }); }catch(e){}
     });
   }
   document.getElementById("kartu-filter-kelas").addEventListener("change", renderKartu);
@@ -1545,7 +1320,7 @@
     window.print();
   });
 
-  /* ---------- Modal helpers ---------- */
+  /* Modal helpers */
   function showModal(innerHtml){
     const root = document.getElementById("modal-root");
     root.innerHTML = `<div class="modal-overlay" id="overlay"><div class="modal">${innerHtml}</div></div>`;
@@ -1553,12 +1328,28 @@
   }
   function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
 
-  /* ---------- Pengaturan ---------- */
+  /* Pengaturan */
   function renderPengaturan(){
+    document.getElementById("set-gas-url").value = gasUrl;
     document.getElementById("set-nama-sekolah").value = DB.settings.namaSekolah;
     document.getElementById("set-jam-masuk").value = DB.settings.jamMasuk;
     document.getElementById("set-batas-terlambat").value = DB.settings.batasTerlambat;
   }
+
+  document.getElementById("btn-simpan-gas").addEventListener("click", async ()=>{
+    const url = document.getElementById("set-gas-url").value.trim();
+    gasUrl = url;
+    localStorage.setItem(GAS_URL_KEY, url);
+    toast("Menghubungkan ke Google Sheets...", "");
+    const success = await syncWithGAS();
+    if(success) {
+      toast("Terhubung ke Google Sheets & Data Disinkronkan", "ok");
+      renderAll();
+    } else if(!url) {
+      toast("URL Google Script dikosongkan", "");
+    }
+  });
+
   document.getElementById("btn-simpan-pengaturan").addEventListener("click", ()=>{
     DB.settings.namaSekolah = document.getElementById("set-nama-sekolah").value.trim() || "Sekolah";
     DB.settings.jamMasuk = document.getElementById("set-jam-masuk").value || "07:00";
@@ -1566,10 +1357,11 @@
     saveData();
     toast("Pengaturan disimpan","ok");
   });
+
   document.getElementById("btn-reset-data").addEventListener("click", ()=>{
     showModal(`
       <h3>Hapus Semua Data?</h3>
-      <p style="font-size:13.5px;color:var(--muted);">Tindakan ini akan menghapus seluruh data siswa dan riwayat absensi secara permanen dan tidak dapat dibatalkan.</p>
+      <p style="font-size:13.5px;color:var(--muted);">Tindakan ini akan menghapus seluruh data siswa dan riwayat absensi secara permanen.</p>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="m-cancel">Batal</button>
         <button class="btn btn-danger" id="m-confirm">Ya, Hapus Semua</button>
@@ -1583,7 +1375,7 @@
     };
   });
 
-  /* ---------- Akun Saya ---------- */
+  /* Akun Saya */
   function renderAkunSaya(){
     if(!currentUser) return;
     document.getElementById("me-nama").value = currentUser.nama;
@@ -1608,7 +1400,7 @@
     user.nama = nama; user.username = username;
     if(pw1) user.password = hashPass(pw1);
     currentUser = user;
-    try{ Store.set(SESSION_KEY, JSON.stringify({ username: user.username })).catch(()=>{}); }catch(e){}
+    try{ localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user.username })); }catch(e){}
     saveData();
     document.getElementById("user-chip-name").textContent = user.nama;
     const initials = user.nama.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();
@@ -1617,7 +1409,7 @@
     toast("Akun berhasil diperbarui","ok");
   });
 
-  /* ---------- Kelola User ---------- */
+  /* Kelola User */
   function renderUserTable(){
     const tbody = document.getElementById("user-table");
     if(DB.users.length===0){
@@ -1714,7 +1506,7 @@
     };
   }
 
-  /* ---------- Render All ---------- */
+  /* Render All */
   function renderAll(){
     fillKelasSelects();
     renderDashboard();
