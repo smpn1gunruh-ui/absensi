@@ -627,15 +627,26 @@
     try{ return btoa(unescape(encodeURIComponent(String(pw)))); }catch(e){ return String(pw); }
   }
 
-  async function syncWithGAS(){
+async function syncWithGAS(){
     if(!gasUrl) return false;
     try {
       const res = await fetch(gasUrl);
       const data = await res.json();
       if(data){
-        if(data.students) DB.students = data.students;
-        if(data.attendance) DB.attendance = data.attendance;
-        if(data.users && data.users.length > 0) DB.users = data.users;
+        if(Array.isArray(data.students)) DB.students = data.students;
+        if(Array.isArray(data.attendance)) DB.attendance = data.attendance;
+        
+        // Normalisasi data user dari Spreadsheet
+        if(Array.isArray(data.users) && data.users.length > 0){
+          DB.users = data.users.map(u => ({
+            id: u.id || uid(),
+            username: String(u.username || u.Username || u.USER || "").trim(),
+            password: String(u.password || u.Password || "").trim(),
+            nama: u.nama || u.Nama || u.username || "User",
+            role: u.role || u.Role || "Admin"
+          })).filter(u => u.username !== "");
+        }
+        
         if(data.settings) DB.settings = Object.assign(DB.settings, data.settings);
         saveToLocal();
         return true;
@@ -742,12 +753,16 @@ async function loadData(){
   document.getElementById("btn-login").addEventListener("click", doLogin);
   document.getElementById("login-password").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
   document.getElementById("login-username").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
-
-  function doLogin(){
+function doLogin(){
     const username = document.getElementById("login-username").value.trim();
     const password = document.getElementById("login-password").value;
     const errEl = document.getElementById("login-error");
-    const user = DB.users.find(u=>u.username===username && (u.password===password || u.password===hashPass(password)));
+    
+    // Mencocokkan username & password (baik berupa plaintext maupun hash)
+    const user = DB.users.find(u => 
+      String(u.username).trim().toLowerCase() === username.toLowerCase() && 
+      (String(u.password) === password || String(u.password) === hashPass(password))
+    );
     if(!user){
       errEl.textContent = "Username atau password salah.";
       errEl.style.display = "block";
