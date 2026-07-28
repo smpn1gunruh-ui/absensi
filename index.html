@@ -996,20 +996,89 @@ async function loadData(){
   document.getElementById("btn-login").addEventListener("click", doLogin);
   document.getElementById("login-password").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
   document.getElementById("login-username").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
+function doLogin(){
 
-  function doLogin(){
-    const username = document.getElementById("login-username").value.trim();
-    const password = document.getElementById("login-password").value;
-    const errEl = document.getElementById("login-error");
-    const user = DB.users.find(u => u.username === username && u.password === password);
-    if(!user){
-      errEl.textContent = "Username atau password salah.";
-      errEl.style.display = "block";
-      return;
+    const username =
+    document.getElementById(
+    "login-username"
+    )
+    .value
+    .trim();
+
+
+    const password =
+    document.getElementById(
+    "login-password"
+    )
+    .value
+    .trim();
+
+
+    const errEl =
+    document.getElementById(
+    "login-error"
+    );
+
+
+    //cek data user sudah dimuat atau belum
+    if(DB.users.length===0){
+
+        errEl.textContent =
+        "Data pengguna belum dimuat.";
+
+        errEl.style.display =
+        "block";
+
+        return;
+
     }
+
+
+    const user =
+    DB.users.find(
+
+        u=>
+
+        String(u.username)
+        .trim()===username
+
+        &&
+
+        String(u.password)
+        .trim()===password
+
+    );
+
+
+    if(!user){
+
+        errEl.textContent =
+        "Username atau password salah.";
+
+        errEl.style.display =
+        "block";
+
+        return;
+
+    }
+
+
+    errEl.style.display =
+    "none";
+
     loginSuccess(user);
-    toast("Selamat datang, "+user.nama, "ok");
-  }
+
+
+    toast(
+
+        "Selamat datang, "
+        +user.nama,
+
+        "ok"
+
+    );
+
+}
 
   document.getElementById("btn-logout").addEventListener("click", ()=>{
     currentUser = null;
