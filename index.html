@@ -317,6 +317,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h2M4 9h2M4 13h2M4 17h2"/><path d="M9 5h1M9 9h1.5M9 13h1M9 17h1.5"/><path d="M13 5h2M13 9h1M13 13h2M13 17h1"/><path d="M18 5h2v14h-2z"/></svg>
         Absensi / Scan
       </button>
+      <button class="nav-btn" data-view="nilai">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7M9 11h7"/></svg>
+        Nilai Siswa
+      </button>
       <button class="nav-btn" data-view="laporan">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 13h6M9 17h6M9 9h2"/></svg>
         Laporan
@@ -458,6 +462,45 @@
         </div>
       </section>
 
+      <!-- NILAI SISWA -->
+      <section class="view" id="view-nilai">
+        <div class="panel">
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <input class="search-input" id="nilai-search" placeholder="Cari nama / NIS...">
+              <select class="search-input" id="nilai-filter-kelas" style="width:130px;"><option value="">Semua Kelas</option></select>
+              <select class="search-input" id="nilai-filter-mapel" style="width:160px;"><option value="">Semua Mapel</option></select>
+            </div>
+            <div class="toolbar-left">
+              <button class="btn btn-ghost" id="btn-export-nilai">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 21h16"/></svg>
+                Ekspor Excel
+              </button>
+              <button class="btn btn-gold" id="btn-add-nilai">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+                Tambah Nilai
+              </button>
+            </div>
+          </div>
+          <table>
+            <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Mapel</th><th>Jenis</th><th>Nilai</th><th>Tanggal</th><th style="text-align:right;">Aksi</th></tr></thead>
+            <tbody id="nilai-table"></tbody>
+          </table>
+          <div class="empty-state" id="nilai-empty" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            <p>Belum ada data nilai. Klik "Tambah Nilai" untuk mulai.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Rata-rata Nilai per Siswa <span class="tag">sesuai filter</span></h2>
+          <table>
+            <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Jumlah Nilai</th><th>Rata-rata</th></tr></thead>
+            <tbody id="nilai-rekap-table"></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- LAPORAN -->
       <section class="view" id="view-laporan">
         <div class="panel">
@@ -532,7 +575,7 @@
           <h2>Koneksi Google Spreadsheet</h2>
           <div class="field">
             <label>URL Apps Script (Web App Endpoint)</label>
-            <input id="set-gas-url" placeholder="https://script.google.com/macros/s/.../exec">
+            <input id="set-gas-url" placeholder="https://script.google.com/macros/s/AKfycbwRjhhWKbYtcWNFRMT9w7tyfSqrGGmfuIqdHPytxpFX5vJQEqqlevm8G5oRfiaqk1uUow/exec">
           </div>
           <button class="btn btn-gold" id="btn-simpan-gas">Simpan & Sinkronkan</button>
         </div>
@@ -588,14 +631,15 @@
   "use strict";
 
   const STORAGE_KEY = "absensi-app-data";
-  const SESSION_KEY = "absensi-session";
   const GAS_URL_KEY = "absensi-gas-url";
 
   let DB = {
     students: [],
     attendance: [],
+    grades: [],
     users: [],
-    settings: { namaSekolah: "SMA Negeri Harapan", jamMasuk: "07:00", batasTerlambat: "07:15" }
+    settings: { namaSekolah: "SMA Negeri Harapan", jamMasuk: "07:00", batasTerlambat: "07:15" },
+    counters: { students: 0, attendance: 0, grades: 0, users: 0 }
   };
   let saveTimer = null;
   let html5Qr = null;
@@ -611,7 +655,63 @@
     const d = new Date();
     return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");
   }
-  function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+  function uid(kind){
+    if(!DB.counters) DB.counters = { students: 0, attendance: 0, grades: 0, users: 0 };
+    if(typeof DB.counters[kind] !== "number") DB.counters[kind] = 0;
+    DB.counters[kind]++;
+    return String(DB.counters[kind]);
+  }
+  function relinkByNis(){
+    // Data absensi & nilai dari Google Sheets hanya membawa NIS (bukan Student ID),
+    // jadi di sini kita cocokkan ulang ke id internal siswa yang sedang dipakai.
+    const byNis = {};
+    DB.students.forEach(s=>{ if(s.nis) byNis[s.nis] = s.id; });
+    DB.attendance.forEach(a=>{ if(a.nis && byNis[a.nis]) a.studentId = byNis[a.nis]; });
+    DB.grades.forEach(g=>{ if(g.nis && byNis[g.nis]) g.studentId = byNis[g.nis]; });
+  }
+  function recomputeCounters(){
+    function maxId(arr){
+      return arr.reduce((max, item)=>{
+        const n = parseInt(item.id, 10);
+        return (!isNaN(n) && n > max) ? n : max;
+      }, 0);
+    }
+    DB.counters = {
+      students: maxId(DB.students),
+      attendance: maxId(DB.attendance),
+      grades: maxId(DB.grades),
+      users: maxId(DB.users)
+    };
+  }
+  function renumberStudents(){
+    const map = {};
+    DB.students.forEach((s, idx)=>{
+      const newId = String(idx+1);
+      map[s.id] = newId;
+      s.id = newId;
+    });
+    DB.attendance.forEach(a=>{ if(map[a.studentId]) a.studentId = map[a.studentId]; });
+    DB.grades.forEach(g=>{ if(map[g.studentId]) g.studentId = map[g.studentId]; });
+    DB.counters.students = DB.students.length;
+  }
+  function renumberAttendance(){
+    DB.attendance.forEach((a, idx)=>{ a.id = String(idx+1); });
+    DB.counters.attendance = DB.attendance.length;
+  }
+  function renumberGrades(){
+    DB.grades.forEach((g, idx)=>{ g.id = String(idx+1); });
+    DB.counters.grades = DB.grades.length;
+  }
+  function renumberUsers(){
+    const map = {};
+    DB.users.forEach((u, idx)=>{
+      const newId = String(idx+1);
+      map[u.id] = newId;
+      u.id = newId;
+    });
+    if(currentUser && map[currentUser.id]) currentUser.id = map[currentUser.id];
+    DB.counters.users = DB.users.length;
+  }
   function fmtTanggal(iso){
     if(!iso) return "-";
     const [y,m,d] = iso.split("-");
@@ -619,7 +719,20 @@
     return d+" "+bulan[parseInt(m,10)-1]+" "+y;
   }
   function hashPass(pw){
-    try{ return btoa(unescape(encodeURIComponent(String(pw)))); }catch(e){ return String(pw); }
+    // Disimpan apa adanya (teks biasa) — tidak ada enkripsi/hashing.
+    return String(pw);
+  }
+  function saveToLocal(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        students: DB.students,
+        attendance: DB.attendance,
+        grades: DB.grades,
+        users: DB.users,
+        settings: DB.settings,
+        counters: DB.counters
+      }));
+    }catch(e){ console.error("Gagal menyimpan ke localStorage", e); }
   }
 
   async function syncWithGAS(){
@@ -630,8 +743,11 @@
       if(data && data.success){
         DB.students = data.students || [];
         DB.attendance = data.attendance || [];
+        DB.grades = data.grades || [];
         DB.users = data.users || [];
         DB.settings = Object.assign(DB.settings, data.settings || {});
+        relinkByNis();
+        recomputeCounters();
         saveToLocal();
         return true;
       }
@@ -642,70 +758,163 @@
     return false;
   }
 
-  async function pushToGAS(){
-    if(!gasUrl) return false;
+async function pushToGAS(){
+
+    if(!gasUrl) return true;
+
     try{
-      const response = await fetch(gasUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" }, // Mencegah preflight CORS error di Apps Script
-        body: JSON.stringify({ action: "save", data: DB })
-      });
-      const result = await response.json();
-      return result && result.success;
+
+        const response = await fetch(gasUrl,{
+
+            method:"POST",
+
+            headers:{
+                "Content-Type":
+                "text/plain;charset=utf-8"
+            },
+
+            body:JSON.stringify({
+
+                action:"save",
+
+                data:{
+
+                    students:DB.students,
+                    attendance:DB.attendance,
+                    grades:DB.grades,
+                    users:DB.users,
+                    settings:DB.settings
+
+                }
+
+            })
+
+        });
+
+
+        if(!response.ok){
+
+            throw new Error(
+                "Response : "+
+                response.status
+            );
+
+        }
+
+
+        const result =
+        await response.json();
+
+
+        return result &&
+               result.success;
+
+
     }catch(err){
-      console.error("Push error:", err);
-      return false;
+
+        console.error(err);
+
+        return false;
+
     }
-  }
 
-  function saveToLocal(){
-    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }catch(e){}
-  }
+}
 
-  function saveData(){
+function saveData(){
+
     saveToLocal();
+
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(async ()=>{
-      await pushToGAS();
-    }, 600);
-  }
 
-  async function loadData(){
+    saveTimer = setTimeout(async()=>{
+
+        const ok = await pushToGAS();
+
+        if(gasUrl){
+
+            if(ok){
+                toast("Data berhasil disimpan","ok");
+            }else{
+                toast("Gagal menyimpan ke Spreadsheet","bad");
+            }
+
+        }
+
+    },600);
+
+}
+async function loadData(){
+
     const raw = localStorage.getItem(STORAGE_KEY);
+
     if(raw){
-      try{
-        const parsed = JSON.parse(raw);
-        DB.students = parsed.students || [];
-        DB.attendance = parsed.attendance || [];
-        DB.users = parsed.users || [];
-        DB.settings = Object.assign(DB.settings, parsed.settings || {});
-      }catch(e){}
+
+        try{
+
+            const parsed = JSON.parse(raw);
+
+            DB.students = parsed.students || [];
+            DB.attendance = parsed.attendance || [];
+            DB.grades = parsed.grades || [];
+            DB.users = parsed.users || [];
+            DB.settings = Object.assign(
+                DB.settings,
+                parsed.settings || {}
+            );
+
+        }catch(e){
+            console.error(e);
+        }
+
     }
 
-    if(DB.users.length === 0){
-      DB.users.push({ id: uid(), username:"admin", password: hashPass("admin123"), nama:"Administrator", role:"Admin" });
-      saveToLocal();
+    recomputeCounters();
+
+    if(DB.users.length===0){
+
+        DB.users.push({
+
+            id:uid("users"),
+            username:"admin",
+            password:hashPass("admin123"),
+            nama:"Administrator",
+            role:"Admin"
+
+        });
+
+        saveToLocal();
+
     }
+
 
     if(gasUrl){
-      toast("Menghubungkan ke Google Spreadsheet...", "");
-      const ok = await syncWithGAS();
-      if(ok) toast("Berhasil sinkronisasi dengan Spreadsheet", "ok");
+
+        toast(
+            "Menghubungkan ke Spreadsheet",
+            ""
+        );
+
+        const ok = await syncWithGAS();
+
+        if(ok){
+
+            toast(
+                "Sinkronisasi berhasil",
+                "ok"
+            );
+
+        }
+
     }
+
 
     await restoreSession();
-    renderAll();
-  }
 
+    renderAll();
+
+}
   async function restoreSession(){
-    const raw = localStorage.getItem(SESSION_KEY);
-    if(raw){
-      try{
-        const { username } = JSON.parse(raw);
-        const user = DB.users.find(u=>u.username===username);
-        if(user){ loginSuccess(user); return; }
-      }catch(e){}
-    }
+    // Sesi tidak lagi dipulihkan otomatis — pengguna selalu wajib login ulang.
     showLogin();
   }
 
@@ -738,19 +947,17 @@
     const username = document.getElementById("login-username").value.trim();
     const password = document.getElementById("login-password").value;
     const errEl = document.getElementById("login-error");
-    const user = DB.users.find(u=>u.username===username && (u.password===password || u.password===hashPass(password)));
+    const user = DB.users.find(u => u.username === username && u.password === password);
     if(!user){
       errEl.textContent = "Username atau password salah.";
       errEl.style.display = "block";
       return;
     }
-    try{ localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user.username })); }catch(e){}
     loginSuccess(user);
     toast("Selamat datang, "+user.nama, "ok");
   }
 
   document.getElementById("btn-logout").addEventListener("click", ()=>{
-    try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
     currentUser = null;
     showLogin();
   });
@@ -769,6 +976,7 @@
     dashboard: ["Dashboard","Ringkasan kehadiran hari ini"],
     siswa: ["Data Siswa","Kelola data dan barcode siswa"],
     absensi: ["Absensi / Scan","Pindai barcode untuk mencatat kehadiran"],
+    nilai: ["Nilai Siswa","Kelola nilai akademik siswa"],
     laporan: ["Laporan","Rekap dan riwayat kehadiran siswa"],
     kartu: ["Cetak Kartu","Kartu barcode siswa siap cetak"],
     user: ["Kelola User","Atur akun yang dapat mengakses sistem"],
@@ -788,6 +996,7 @@
     if(v !== "absensi" && camActive) stopCamera();
     if(v === "absensi") setTimeout(()=>document.getElementById("scan-input").focus(), 50);
     if(v === "siswa") renderSiswaTable();
+    if(v === "nilai") renderNilai();
     if(v === "laporan") renderLaporan();
     if(v === "kartu") renderKartu();
     if(v === "user") renderUserTable();
@@ -800,9 +1009,13 @@
     const set = new Set(DB.students.map(s=>s.kelas).filter(Boolean));
     return Array.from(set).sort();
   }
+  function getMapelList(){
+    const set = new Set(DB.grades.map(g=>g.mapel).filter(Boolean));
+    return Array.from(set).sort();
+  }
   function fillKelasSelects(){
     const kelasList = getKelasList();
-    const targets = ["siswa-filter-kelas","absensi-filter-kelas","lap-kelas","kartu-filter-kelas"];
+    const targets = ["siswa-filter-kelas","absensi-filter-kelas","lap-kelas","kartu-filter-kelas","nilai-filter-kelas"];
     targets.forEach(id=>{
       const el = document.getElementById(id);
       if(!el) return;
@@ -817,6 +1030,13 @@
         .slice().sort((a,b)=>a.nama.localeCompare(b.nama))
         .map(s=>`<option value="${s.id}">${escapeHtml(s.nama)} (${escapeHtml(s.nis)})</option>`).join("");
       if(DB.students.find(s=>s.id===curS)) lapSiswa.value = curS;
+    }
+    const mapelSelect = document.getElementById("nilai-filter-mapel");
+    if(mapelSelect){
+      const curM = mapelSelect.value;
+      const mapelList = getMapelList();
+      mapelSelect.innerHTML = '<option value="">Semua Mapel</option>' + mapelList.map(m=>`<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+      if(mapelList.includes(curM)) mapelSelect.value = curM;
     }
   }
   function escapeHtml(str){
@@ -851,7 +1071,7 @@
     }
     const waktu = nowTime();
     const status = determineStatus(waktu);
-    DB.attendance.push({ id: uid(), studentId: student.id, tanggal: today, waktu, status });
+    DB.attendance.push({ id: uid("attendance"), studentId: student.id, nis: student.nis, namaSiswa: student.nama, tanggal: today, waktu, status });
     saveData();
     flash.className = "last-flash ok";
     flash.innerHTML = `<div class="nm">${escapeHtml(student.nama)}</div><div class="meta">${escapeHtml(student.kelas||"-")} · ${status} · ${waktu}</div>`;
@@ -1003,7 +1223,7 @@
     if(!s) return;
     showModal(`
       <h3>Hapus Siswa?</h3>
-      <p style="font-size:13.5px;color:var(--muted);">Data <strong>${escapeHtml(s.nama)}</strong> beserta riwayat absensinya akan dihapus permanen.</p>
+      <p style="font-size:13.5px;color:var(--muted);">Data <strong>${escapeHtml(s.nama)}</strong> beserta riwayat absensi dan nilainya akan dihapus permanen.</p>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="m-cancel">Batal</button>
         <button class="btn btn-danger" id="m-confirm">Hapus</button>
@@ -1013,6 +1233,10 @@
     document.getElementById("m-confirm").onclick = ()=>{
       DB.students = DB.students.filter(x=>x.id!==id);
       DB.attendance = DB.attendance.filter(a=>a.studentId!==id);
+      DB.grades = DB.grades.filter(g=>g.studentId!==id);
+      renumberStudents();
+      renumberAttendance();
+      renumberGrades();
       saveData(); renderAll(); closeModal();
       toast("Siswa dihapus","ok");
     };
@@ -1072,7 +1296,7 @@
             existing.nama = nama; existing.kelas = kelas; existing.jk = jk || existing.jk;
             updated++;
           } else {
-            DB.students.push({ id: uid(), nis, nama, kelas, jk });
+            DB.students.push({ id: uid("students"), nis, nama, kelas, jk });
             added++;
           }
         });
@@ -1117,9 +1341,11 @@
       if(dup){ toast("NIS sudah digunakan siswa lain","bad"); return; }
       if(existing){
         existing.nis=nis; existing.nama=nama; existing.kelas=kelas; existing.jk=jk;
+        DB.attendance.forEach(a=>{ if(a.studentId===existing.id){ a.nis=nis; a.namaSiswa=nama; } });
+        DB.grades.forEach(g=>{ if(g.studentId===existing.id){ g.nis=nis; g.namaSiswa=nama; g.kelas=kelas; } });
         toast("Data siswa diperbarui","ok");
       } else {
-        DB.students.push({ id:uid(), nis, nama, kelas, jk });
+        DB.students.push({ id:uid("students"), nis, nama, kelas, jk });
         toast("Siswa ditambahkan","ok");
       }
       saveData(); renderAll(); closeModal();
@@ -1161,14 +1387,170 @@
     const today = todayISO();
     let rec = DB.attendance.find(a=>a.studentId===studentId && a.tanggal===today);
     if(newStatus === "Belum"){
-      if(rec) DB.attendance = DB.attendance.filter(a=>a!==rec);
+      if(rec){ DB.attendance = DB.attendance.filter(a=>a!==rec); renumberAttendance(); }
     } else if(rec){
       rec.status = newStatus;
     } else {
-      DB.attendance.push({ id:uid(), studentId, tanggal:today, waktu:nowTime(), status:newStatus });
+      const student = DB.students.find(s=>s.id===studentId);
+      DB.attendance.push({ id:uid("attendance"), studentId, nis: student?student.nis:"", namaSiswa: student?student.nama:"", tanggal:today, waktu:nowTime(), status:newStatus });
     }
     saveData(); renderAll();
     toast("Status diperbarui","ok");
+  });
+
+  /* Render: Nilai Siswa */
+  function getFilteredGrades(){
+    const search = document.getElementById("nilai-search").value.trim().toLowerCase();
+    const kelasFilter = document.getElementById("nilai-filter-kelas").value;
+    const mapelFilter = document.getElementById("nilai-filter-mapel").value;
+    let list = DB.grades.slice();
+    if(search) list = list.filter(g => (g.namaSiswa||"").toLowerCase().includes(search) || (g.nis||"").toLowerCase().includes(search));
+    if(kelasFilter) list = list.filter(g => g.kelas === kelasFilter);
+    if(mapelFilter) list = list.filter(g => g.mapel === mapelFilter);
+    return list.slice().sort((a,b)=> b.tanggal.localeCompare(a.tanggal) || (a.namaSiswa||"").localeCompare(b.namaSiswa||""));
+  }
+  function renderNilai(){
+    const list = getFilteredGrades();
+    const tbody = document.getElementById("nilai-table");
+    const emptyEl = document.getElementById("nilai-empty");
+    if(list.length===0){
+      tbody.innerHTML = "";
+      emptyEl.style.display = "block";
+    } else {
+      emptyEl.style.display = "none";
+      tbody.innerHTML = list.map(g=>`
+        <tr>
+          <td class="mono">${escapeHtml(g.nis||"-")}</td>
+          <td>${escapeHtml(g.namaSiswa||"-")}</td>
+          <td><span class="kelas-pill">${escapeHtml(g.kelas||"-")}</span></td>
+          <td>${escapeHtml(g.mapel||"-")}</td>
+          <td>${escapeHtml(g.jenis||"-")}</td>
+          <td><strong>${escapeHtml(g.nilai)}</strong></td>
+          <td>${fmtTanggal(g.tanggal)}</td>
+          <td style="text-align:right;">
+            <button class="btn btn-ghost btn-sm" data-edit-nilai="${g.id}">Edit</button>
+            <button class="btn btn-danger btn-sm" data-del-nilai="${g.id}">Hapus</button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    const rekapBody = document.getElementById("nilai-rekap-table");
+    const byStudent = {};
+    list.forEach(g=>{
+      if(!byStudent[g.studentId]) byStudent[g.studentId] = { nis:g.nis, namaSiswa:g.namaSiswa, kelas:g.kelas, nilai:[] };
+      const n = parseFloat(g.nilai);
+      if(!isNaN(n)) byStudent[g.studentId].nilai.push(n);
+    });
+    const rekapRows = Object.values(byStudent).sort((a,b)=>(a.namaSiswa||"").localeCompare(b.namaSiswa||""));
+    if(rekapRows.length===0){
+      rekapBody.innerHTML = `<tr><td colspan="5" class="empty-state">Belum ada data nilai untuk filter ini.</td></tr>`;
+    } else {
+      rekapBody.innerHTML = rekapRows.map(r=>{
+        const avg = r.nilai.length ? (r.nilai.reduce((a,b)=>a+b,0)/r.nilai.length) : 0;
+        return `<tr>
+          <td class="mono">${escapeHtml(r.nis||"-")}</td>
+          <td>${escapeHtml(r.namaSiswa||"-")}</td>
+          <td><span class="kelas-pill">${escapeHtml(r.kelas||"-")}</span></td>
+          <td>${r.nilai.length}</td>
+          <td><strong>${r.nilai.length?avg.toFixed(1):"-"}</strong></td>
+        </tr>`;
+      }).join("");
+    }
+  }
+  document.getElementById("nilai-search").addEventListener("input", renderNilai);
+  document.getElementById("nilai-filter-kelas").addEventListener("change", renderNilai);
+  document.getElementById("nilai-filter-mapel").addEventListener("change", renderNilai);
+  document.getElementById("btn-add-nilai").addEventListener("click", ()=>openNilaiModal(null));
+  document.getElementById("nilai-table").addEventListener("click", (e)=>{
+    const editId = e.target.dataset.editNilai;
+    const delId = e.target.dataset.delNilai;
+    if(editId) openNilaiModal(DB.grades.find(g=>g.id===editId));
+    if(delId) confirmDeleteNilai(delId);
+  });
+
+  function openNilaiModal(existing){
+    if(DB.students.length===0){ toast("Tambahkan data siswa terlebih dahulu","bad"); return; }
+    const studentOptions = DB.students.slice().sort((a,b)=>a.nama.localeCompare(b.nama))
+      .map(s=>`<option value="${s.id}" ${existing&&existing.studentId===s.id?"selected":""}>${escapeHtml(s.nama)} (${escapeHtml(s.nis)})</option>`).join("");
+    showModal(`
+      <h3>${existing ? "Edit Nilai" : "Tambah Nilai"}</h3>
+      <div class="field"><label>Siswa</label><select id="g-student">${studentOptions}</select></div>
+      <div class="row-2">
+        <div class="field"><label>Mata Pelajaran</label><input id="g-mapel" placeholder="cth. Matematika" value="${existing?escapeHtml(existing.mapel||""):""}"></div>
+        <div class="field"><label>Jenis Penilaian</label>
+          <select id="g-jenis">
+            ${["Tugas","Ulangan Harian","UTS","UAS"].map(opt=>`<option value="${opt}" ${existing&&existing.jenis===opt?"selected":""}>${opt}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      <div class="row-2">
+        <div class="field"><label>Nilai (0-100)</label><input id="g-nilai" type="number" min="0" max="100" step="0.1" value="${existing?escapeHtml(existing.nilai):""}"></div>
+        <div class="field"><label>Tanggal</label><input id="g-tanggal" type="date" value="${existing?escapeHtml(existing.tanggal):todayISO()}"></div>
+      </div>
+      <div class="field"><label>Keterangan (opsional)</label><input id="g-ket" value="${existing?escapeHtml(existing.keterangan||""):""}"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="m-cancel">Batal</button>
+        <button class="btn btn-primary" id="m-save">${existing?"Simpan Perubahan":"Tambah"}</button>
+      </div>
+    `);
+    document.getElementById("m-cancel").onclick = closeModal;
+    document.getElementById("m-save").onclick = ()=>{
+      const studentId = document.getElementById("g-student").value;
+      const mapel = document.getElementById("g-mapel").value.trim();
+      const jenis = document.getElementById("g-jenis").value;
+      const nilaiRaw = document.getElementById("g-nilai").value;
+      const tanggal = document.getElementById("g-tanggal").value;
+      const keterangan = document.getElementById("g-ket").value.trim();
+      const student = DB.students.find(s=>s.id===studentId);
+      if(!student || !mapel || nilaiRaw===""){ toast("Siswa, mata pelajaran, dan nilai wajib diisi","bad"); return; }
+      const nilai = parseFloat(nilaiRaw);
+      if(isNaN(nilai) || nilai < 0 || nilai > 100){ toast("Nilai harus di antara 0 dan 100","bad"); return; }
+      if(!tanggal){ toast("Tanggal wajib diisi","bad"); return; }
+      if(existing){
+        existing.studentId = studentId; existing.nis = student.nis; existing.namaSiswa = student.nama; existing.kelas = student.kelas;
+        existing.mapel = mapel; existing.jenis = jenis; existing.nilai = nilai; existing.tanggal = tanggal; existing.keterangan = keterangan;
+        toast("Nilai diperbarui","ok");
+      } else {
+        DB.grades.push({ id: uid("grades"), studentId, nis: student.nis, namaSiswa: student.nama, kelas: student.kelas, mapel, jenis, nilai, tanggal, keterangan });
+        toast("Nilai ditambahkan","ok");
+      }
+      saveData(); renderAll(); closeModal();
+    };
+  }
+
+  function confirmDeleteNilai(id){
+    const g = DB.grades.find(x=>x.id===id);
+    if(!g) return;
+    showModal(`
+      <h3>Hapus Nilai?</h3>
+      <p style="font-size:13.5px;color:var(--muted);">Nilai ${escapeHtml(g.mapel||"-")} (${escapeHtml(g.jenis||"-")}) milik <strong>${escapeHtml(g.namaSiswa||"-")}</strong> akan dihapus permanen.</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="m-cancel">Batal</button>
+        <button class="btn btn-danger" id="m-confirm">Hapus</button>
+      </div>
+    `);
+    document.getElementById("m-cancel").onclick = closeModal;
+    document.getElementById("m-confirm").onclick = ()=>{
+      DB.grades = DB.grades.filter(x=>x.id!==id);
+      renumberGrades();
+      saveData(); renderAll(); closeModal();
+      toast("Nilai dihapus","ok");
+    };
+  }
+
+  document.getElementById("btn-export-nilai").addEventListener("click", ()=>{
+    const list = getFilteredGrades();
+    if(list.length===0){ toast("Tidak ada data nilai untuk diekspor","bad"); return; }
+    const rows = list.map(g=>({
+      NIS: g.nis||"", Nama: g.namaSiswa||"", Kelas: g.kelas||"", Mapel: g.mapel||"", Jenis: g.jenis||"", Nilai: g.nilai, Tanggal: g.tanggal, Keterangan: g.keterangan||""
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:12},{wch:24},{wch:10},{wch:16},{wch:14},{wch:8},{wch:12},{wch:20}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Nilai Siswa");
+    XLSX.writeFile(wb, "nilai-siswa-"+todayISO()+".xlsx");
+    toast("Data nilai diekspor ke Excel","ok");
   });
 
   /* Render: Laporan */
@@ -1366,7 +1748,7 @@
   document.getElementById("btn-reset-data").addEventListener("click", ()=>{
     showModal(`
       <h3>Hapus Semua Data?</h3>
-      <p style="font-size:13.5px;color:var(--muted);">Tindakan ini akan menghapus seluruh data siswa dan riwayat absensi secara permanen.</p>
+      <p style="font-size:13.5px;color:var(--muted);">Tindakan ini akan menghapus seluruh data siswa, riwayat absensi, dan nilai secara permanen.</p>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="m-cancel">Batal</button>
         <button class="btn btn-danger" id="m-confirm">Ya, Hapus Semua</button>
@@ -1374,8 +1756,19 @@
     `);
     document.getElementById("m-cancel").onclick = closeModal;
     document.getElementById("m-confirm").onclick = ()=>{
-      DB.students = []; DB.attendance = [];
-      saveData(); renderAll(); closeModal();
+      DB.students = [];
+      DB.attendance = [];
+      DB.grades = [];
+      DB.users = [];
+      DB.settings = {
+        namaSekolah: "Sekolah",
+        jamMasuk: "07:00",
+        batasTerlambat: "07:15"
+      };
+      DB.counters = { students: 0, attendance: 0, grades: 0, users: 0 };
+      saveData();
+      renderAll();
+      closeModal();
       toast("Semua data telah dihapus","ok");
     };
   });
@@ -1405,7 +1798,6 @@
     user.nama = nama; user.username = username;
     if(pw1) user.password = hashPass(pw1);
     currentUser = user;
-    try{ localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user.username })); }catch(e){}
     saveData();
     document.getElementById("user-chip-name").textContent = user.nama;
     const initials = user.nama.split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();
@@ -1482,7 +1874,7 @@
         }
         toast("User diperbarui","ok");
       } else {
-        DB.users.push({ id: uid(), username, nama, role, password: hashPass(password) });
+        DB.users.push({ id: uid("users"), username, nama, role, password: hashPass(password) });
         toast("User ditambahkan","ok");
       }
       saveData(); renderUserTable(); closeModal();
@@ -1507,25 +1899,79 @@
     document.getElementById("m-cancel").onclick = closeModal;
     document.getElementById("m-confirm").onclick = ()=>{
       DB.users = DB.users.filter(u=>u.id!==id);
+      renumberUsers();
       saveData(); renderUserTable(); closeModal();
       toast("User dihapus","ok");
     };
   }
 
   /* Render All */
-  function renderAll(){
-    fillKelasSelects();
-    renderDashboard();
-    renderSiswaTable();
-    renderAbsensiTable();
-    renderPengaturan();
-    renderAkunSaya();
-    if(document.getElementById("view-laporan").classList.contains("active")) renderLaporan();
-    if(document.getElementById("view-kartu").classList.contains("active")) renderKartu();
-    if(currentUser && document.getElementById("view-user").classList.contains("active")) renderUserTable();
-  }
+function renderAll(){
 
-  loadData();
+    fillKelasSelects();
+
+    renderDashboard();
+
+    renderSiswaTable();
+
+    renderAbsensiTable();
+
+    renderPengaturan();
+
+    renderAkunSaya();
+
+
+    const laporan =
+    document.getElementById("view-laporan");
+
+    const kartu =
+    document.getElementById("view-kartu");
+
+    const nilai =
+    document.getElementById("view-nilai");
+
+    const user =
+    document.getElementById("view-user");
+
+
+    if(
+        laporan &&
+        laporan.classList.contains("active")
+    ){
+        renderLaporan();
+    }
+
+
+    if(
+        kartu &&
+        kartu.classList.contains("active")
+    ){
+        renderKartu();
+    }
+
+
+    if(
+        nilai &&
+        nilai.classList.contains("active")
+    ){
+        renderNilai();
+    }
+
+
+    if(
+        currentUser &&
+        user &&
+        user.classList.contains("active")
+    ){
+        renderUserTable();
+    }
+
+}
+
+
+  document.addEventListener("DOMContentLoaded", () => {
+    loadData();
+  });
 })();
 </script>
 </body>
