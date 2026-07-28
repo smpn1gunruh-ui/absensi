@@ -862,63 +862,100 @@ function saveData(){
 }
 async function loadData(){
 
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw =
+    localStorage.getItem(
+        STORAGE_KEY
+    );
 
     if(raw){
 
         try{
 
-            const parsed = JSON.parse(raw);
+            const parsed =
+            JSON.parse(raw);
 
-            DB.students = parsed.students || [];
-            DB.attendance = parsed.attendance || [];
-            DB.grades = parsed.grades || [];
-            DB.users = parsed.users || [];
-            DB.settings = Object.assign(
+            DB.students =
+            parsed.students || [];
+
+            DB.attendance =
+            parsed.attendance || [];
+
+            DB.grades =
+            parsed.grades || [];
+
+            DB.users =
+            parsed.users || [];
+
+            DB.settings =
+            Object.assign(
                 DB.settings,
                 parsed.settings || {}
             );
 
         }catch(e){
+
             console.error(e);
+
         }
 
     }
 
+
     recomputeCounters();
 
+
+    //jika belum ada user
     if(DB.users.length===0){
 
         DB.users.push({
 
             id:uid("users"),
             username:"admin",
-            password:hashPass("admin123"),
+            password:"admin123",
             nama:"Administrator",
             role:"Admin"
 
         });
 
-        saveToLocal();
-
     }
 
 
+
+    //SELALU SINKRONKAN DENGAN SPREADSHEET
     if(gasUrl){
 
-        toast(
-            "Menghubungkan ke Spreadsheet",
-            ""
-        );
-
-        const ok = await syncWithGAS();
-
-        if(ok){
+        try{
 
             toast(
-                "Sinkronisasi berhasil",
-                "ok"
+                "Menghubungkan ke Spreadsheet",
+                ""
             );
+
+
+            const ok =
+            await syncWithGAS();
+
+
+            if(ok){
+
+                toast(
+                    "Sinkronisasi berhasil",
+                    "ok"
+                );
+
+            }else{
+
+                toast(
+                    "Gagal mengambil data Spreadsheet",
+                    "bad"
+                );
+
+            }
+
+
+        }catch(err){
+
+            console.error(err);
 
         }
 
