@@ -630,22 +630,39 @@
 (function(){
   "use strict";
 
-  const STORAGE_KEY = "absensi-app-data";
-  const GAS_URL_KEY = "absensi-gas-url";
+const STORAGE_KEY = "absensi-app-data";
 
-  let DB = {
+// MASUKKAN URL APPS SCRIPT ANDA DISINI
+const GAS_URL =
+"https://script.google.com/macros/s/AKfycbxBP_1dNj2nuxK1UjcGvQ4CtRlWtyF92aW2FOylwe588-t60Lf_x8Dro5oS9myqRFRFcw/exec";
+
+
+let DB = {
     students: [],
     attendance: [],
     grades: [],
     users: [],
-    settings: { namaSekolah: "SMA Negeri Harapan", jamMasuk: "07:00", batasTerlambat: "07:15" },
-    counters: { students: 0, attendance: 0, grades: 0, users: 0 }
-  };
-  let saveTimer = null;
-  let html5Qr = null;
-  let camActive = false;
-  let currentUser = null;
-  let gasUrl = localStorage.getItem(GAS_URL_KEY) || "";
+    settings:{
+        namaSekolah:"SMA Negeri Harapan",
+        jamMasuk:"07:00",
+        batasTerlambat:"07:15"
+    },
+    counters:{
+        students:0,
+        attendance:0,
+        grades:0,
+        users:0
+    }
+};
+
+let saveTimer = null;
+let html5Qr = null;
+let camActive = false;
+let currentUser = null;
+
+
+// sekarang tidak lagi mengambil dari localStorage
+let gasUrl = GAS_URL;
 
   function todayISO(){
     const d = new Date();
