@@ -468,36 +468,58 @@
           <div class="toolbar">
             <div class="toolbar-left">
               <input class="search-input" id="nilai-search" placeholder="Cari nama / NIS...">
-              <select class="search-input" id="nilai-filter-kelas" style="width:130px;"><option value="">Semua Kelas</option></select>
-              <select class="search-input" id="nilai-filter-mapel" style="width:160px;"><option value="">Semua Mapel</option></select>
+              <select class="search-input" id="nilai-filter-kelas" style="width:150px;"><option value="">Semua Kelas</option></select>
             </div>
             <div class="toolbar-left">
               <button class="btn btn-ghost" id="btn-export-nilai">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 21h16"/></svg>
                 Ekspor Excel
               </button>
-              <button class="btn btn-gold" id="btn-add-nilai">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
-                Tambah Nilai
-              </button>
             </div>
           </div>
-          <table>
-            <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Mapel</th><th>Jenis</th><th>Nilai</th><th>Tanggal</th><th style="text-align:right;">Aksi</th></tr></thead>
-            <tbody id="nilai-table"></tbody>
-          </table>
-          <div class="empty-state" id="nilai-empty" style="display:none;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            <p>Belum ada data nilai. Klik "Tambah Nilai" untuk mulai.</p>
+
+          <div class="row-2" style="margin-bottom:16px;">
+            <div class="field">
+              <label>Mata Pelajaran</label>
+              <input class="search-input" id="nilai-mapel-input" placeholder="Contoh: TIK">
+            </div>
+            <div class="field">
+              <label>Tanggal Penilaian</label>
+              <input class="search-input" id="nilai-tanggal-input" type="date" value="${todayISO()}">
+            </div>
+          </div>
+
+          <div class="panel" style="margin:0; padding:0; box-shadow:none; border:0;">
+            <div class="toolbar" style="margin-bottom:10px;">
+              <h2 style="margin:0;">Daftar Nilai Siswa</h2>
+              <span class="tag">Pilih kelas, lalu isi penilaian dan nilai</span>
+            </div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr><th>NIS</th><th>Nama</th><th>Kelas</th><th style="min-width:220px;">Penilaian</th><th style="width:130px;">Nilai</th></tr>
+                </thead>
+                <tbody id="nilai-table"></tbody>
+              </table>
+            </div>
+            <div class="empty-state" id="nilai-empty" style="display:none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              <p>Tidak ada siswa untuk ditampilkan.</p>
+            </div>
+            <div class="modal-actions" style="margin-top:16px;">
+              <button class="btn btn-primary" id="btn-save-nilai-kelas">Simpan Nilai Satu Kelas</button>
+            </div>
           </div>
         </div>
 
         <div class="panel">
-          <h2>Rata-rata Nilai per Siswa <span class="tag">sesuai filter</span></h2>
-          <table>
-            <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Jumlah Nilai</th><th>Rata-rata</th></tr></thead>
-            <tbody id="nilai-rekap-table"></tbody>
-          </table>
+          <h2>Riwayat Nilai <span class="tag">sesuai filter kelas</span></h2>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Mapel</th><th>Penilaian</th><th>Nilai</th><th>Tanggal</th><th style="text-align:right;">Aksi</th></tr></thead>
+              <tbody id="nilai-riwayat-table"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -1525,122 +1547,116 @@ function doLogin(){
   function getFilteredGrades(){
     const search = document.getElementById("nilai-search").value.trim().toLowerCase();
     const kelasFilter = document.getElementById("nilai-filter-kelas").value;
-    const mapelFilter = document.getElementById("nilai-filter-mapel").value;
     let list = DB.grades.slice();
     if(search) list = list.filter(g => (g.namaSiswa||"").toLowerCase().includes(search) || (g.nis||"").toLowerCase().includes(search));
     if(kelasFilter) list = list.filter(g => g.kelas === kelasFilter);
-    if(mapelFilter) list = list.filter(g => g.mapel === mapelFilter);
     return list.slice().sort((a,b)=> b.tanggal.localeCompare(a.tanggal) || (a.namaSiswa||"").localeCompare(b.namaSiswa||""));
   }
+
   function renderNilai(){
-    const list = getFilteredGrades();
+    const search = document.getElementById("nilai-search").value.trim().toLowerCase();
+    const kelasFilter = document.getElementById("nilai-filter-kelas").value;
     const tbody = document.getElementById("nilai-table");
     const emptyEl = document.getElementById("nilai-empty");
-    if(list.length===0){
+    let students = DB.students.slice().sort((a,b)=>(a.nama||"").localeCompare(b.nama||""));
+    if(kelasFilter) students = students.filter(s=>s.kelas===kelasFilter);
+    if(search) students = students.filter(s=>(s.nama||"").toLowerCase().includes(search) || (s.nis||"").toLowerCase().includes(search));
+
+    const mapel = document.getElementById("nilai-mapel-input").value.trim();
+    const tanggal = document.getElementById("nilai-tanggal-input").value || todayISO();
+
+    if(students.length===0){
       tbody.innerHTML = "";
       emptyEl.style.display = "block";
     } else {
       emptyEl.style.display = "none";
-      tbody.innerHTML = list.map(g=>`
-        <tr>
-          <td class="mono">${escapeHtml(g.nis||"-")}</td>
-          <td>${escapeHtml(g.namaSiswa||"-")}</td>
-          <td><span class="kelas-pill">${escapeHtml(g.kelas||"-")}</span></td>
-          <td>${escapeHtml(g.mapel||"-")}</td>
-          <td>${escapeHtml(g.jenis||"-")}</td>
-          <td><strong>${escapeHtml(g.nilai)}</strong></td>
-          <td>${fmtTanggal(g.tanggal)}</td>
-          <td style="text-align:right;">
-            <button class="btn btn-ghost btn-sm" data-edit-nilai="${g.id}">Edit</button>
-            <button class="btn btn-danger btn-sm" data-del-nilai="${g.id}">Hapus</button>
-          </td>
-        </tr>
-      `).join("");
-    }
-
-    const rekapBody = document.getElementById("nilai-rekap-table");
-    const byStudent = {};
-    list.forEach(g=>{
-      if(!byStudent[g.studentId]) byStudent[g.studentId] = { nis:g.nis, namaSiswa:g.namaSiswa, kelas:g.kelas, nilai:[] };
-      const n = parseFloat(g.nilai);
-      if(!isNaN(n)) byStudent[g.studentId].nilai.push(n);
-    });
-    const rekapRows = Object.values(byStudent).sort((a,b)=>(a.namaSiswa||"").localeCompare(b.namaSiswa||""));
-    if(rekapRows.length===0){
-      rekapBody.innerHTML = `<tr><td colspan="5" class="empty-state">Belum ada data nilai untuk filter ini.</td></tr>`;
-    } else {
-      rekapBody.innerHTML = rekapRows.map(r=>{
-        const avg = r.nilai.length ? (r.nilai.reduce((a,b)=>a+b,0)/r.nilai.length) : 0;
+      tbody.innerHTML = students.map(s=>{
+        // Prefill from an existing record for the selected mapel/date, if available.
+        const existing = DB.grades.find(g => g.studentId===s.id && (!mapel || g.mapel===mapel) && g.tanggal===tanggal);
         return `<tr>
-          <td class="mono">${escapeHtml(r.nis||"-")}</td>
-          <td>${escapeHtml(r.namaSiswa||"-")}</td>
-          <td><span class="kelas-pill">${escapeHtml(r.kelas||"-")}</span></td>
-          <td>${r.nilai.length}</td>
-          <td><strong>${r.nilai.length?avg.toFixed(1):"-"}</strong></td>
+          <td class="mono">${escapeHtml(s.nis||"-")}</td>
+          <td>${escapeHtml(s.nama||"-")}</td>
+          <td><span class="kelas-pill">${escapeHtml(s.kelas||"-")}</span></td>
+          <td><input class="nilai-jenis-input" data-student="${s.id}" value="${escapeHtml(existing?.jenis||"")}" placeholder="Contoh: Tugas 1"></td>
+          <td><input class="nilai-number-input" data-student="${s.id}" type="number" min="0" max="100" step="0.1" value="${existing?.nilai!==undefined?escapeHtml(existing.nilai):""}" placeholder="0-100"></td>
         </tr>`;
       }).join("");
     }
+    renderNilaiRiwayat();
   }
+
+  function renderNilaiRiwayat(){
+    const body = document.getElementById("nilai-riwayat-table");
+    const list = getFilteredGrades();
+    if(list.length===0){
+      body.innerHTML = `<tr><td colspan="8" class="empty-state">Belum ada riwayat nilai untuk filter ini.</td></tr>`;
+      return;
+    }
+    body.innerHTML = list.map(g=>`<tr>
+      <td class="mono">${escapeHtml(g.nis||"-")}</td>
+      <td>${escapeHtml(g.namaSiswa||"-")}</td>
+      <td><span class="kelas-pill">${escapeHtml(g.kelas||"-")}</span></td>
+      <td>${escapeHtml(g.mapel||"-")}</td>
+      <td>${escapeHtml(g.jenis||"-")}</td>
+      <td><strong>${escapeHtml(g.nilai)}</strong></td>
+      <td>${fmtTanggal(g.tanggal)}</td>
+      <td style="text-align:right;">
+        <button class="btn btn-ghost btn-sm" data-edit-nilai="${g.id}">Edit</button>
+        <button class="btn btn-danger btn-sm" data-del-nilai="${g.id}">Hapus</button>
+      </td>
+    </tr>`).join("");
+  }
+
   document.getElementById("nilai-search").addEventListener("input", renderNilai);
   document.getElementById("nilai-filter-kelas").addEventListener("change", renderNilai);
-  document.getElementById("nilai-filter-mapel").addEventListener("change", renderNilai);
-  document.getElementById("btn-add-nilai").addEventListener("click", ()=>openNilaiModal(null));
-  document.getElementById("nilai-table").addEventListener("click", (e)=>{
+  document.getElementById("nilai-mapel-input").addEventListener("input", renderNilai);
+  document.getElementById("nilai-tanggal-input").addEventListener("change", renderNilai);
+
+  document.getElementById("btn-save-nilai-kelas").addEventListener("click", ()=>{
+    const mapel = document.getElementById("nilai-mapel-input").value.trim();
+    const tanggal = document.getElementById("nilai-tanggal-input").value;
+    if(!mapel){ toast("Mata pelajaran wajib diisi","bad"); return; }
+    if(!tanggal){ toast("Tanggal penilaian wajib diisi","bad"); return; }
+
+    const jenisInputs = document.querySelectorAll(".nilai-jenis-input");
+    const nilaiInputs = document.querySelectorAll(".nilai-number-input");
+    let saved = 0;
+    let invalid = false;
+
+    nilaiInputs.forEach(input=>{
+      const studentId = input.dataset.student;
+      const jenisInput = document.querySelector(`.nilai-jenis-input[data-student="${studentId}"]`);
+      const jenis = jenisInput ? jenisInput.value.trim() : "";
+      const raw = input.value.trim();
+      if(raw==="") return;
+      const nilai = parseFloat(raw);
+      if(!jenis){ invalid = true; return; }
+      if(isNaN(nilai) || nilai<0 || nilai>100){ invalid = true; return; }
+      const student = DB.students.find(s=>s.id===studentId);
+      if(!student) return;
+
+      // Update the matching assessment, otherwise create a new record.
+      let existing = DB.grades.find(g=>g.studentId===studentId && g.mapel===mapel && g.jenis===jenis && g.tanggal===tanggal);
+      if(existing){
+        existing.nis=student.nis; existing.namaSiswa=student.nama; existing.kelas=student.kelas; existing.nilai=nilai;
+      } else {
+        DB.grades.push({id:uid("grades"), studentId, nis:student.nis, namaSiswa:student.nama, kelas:student.kelas, mapel, jenis, nilai, tanggal, keterangan:""});
+      }
+      saved++;
+    });
+
+    if(invalid){ toast("Periksa penilaian dan nilai. Nilai harus 0-100.","bad"); return; }
+    if(saved===0){ toast("Belum ada nilai yang diisi","bad"); return; }
+    saveData(); renderAll();
+    toast(`${saved} nilai berhasil disimpan`,"ok");
+  });
+
+  document.getElementById("nilai-riwayat-table").addEventListener("click", (e)=>{
     const editId = e.target.dataset.editNilai;
     const delId = e.target.dataset.delNilai;
     if(editId) openNilaiModal(DB.grades.find(g=>g.id===editId));
     if(delId) confirmDeleteNilai(delId);
   });
-
-  function openNilaiModal(existing){
-    if(DB.students.length===0){ toast("Tambahkan data siswa terlebih dahulu","bad"); return; }
-    const studentOptions = DB.students.slice().sort((a,b)=>a.nama.localeCompare(b.nama))
-      .map(s=>`<option value="${s.id}" ${existing&&existing.studentId===s.id?"selected":""}>${escapeHtml(s.nama)} (${escapeHtml(s.nis)})</option>`).join("");
-    showModal(`
-      <h3>${existing ? "Edit Nilai" : "Tambah Nilai"}</h3>
-      <div class="field"><label>Siswa</label><select id="g-student">${studentOptions}</select></div>
-      <div class="row-2">
-        <div class="field"><label>Mata Pelajaran</label><input id="g-mapel" placeholder="cth. Matematika" value="${existing?escapeHtml(existing.mapel||""):""}"></div>
-        <div class="field"><label>Jenis Penilaian</label>
-          <select id="g-jenis">
-            ${["Tugas","Ulangan Harian","UTS","UAS"].map(opt=>`<option value="${opt}" ${existing&&existing.jenis===opt?"selected":""}>${opt}</option>`).join("")}
-          </select>
-        </div>
-      </div>
-      <div class="row-2">
-        <div class="field"><label>Nilai (0-100)</label><input id="g-nilai" type="number" min="0" max="100" step="0.1" value="${existing?escapeHtml(existing.nilai):""}"></div>
-        <div class="field"><label>Tanggal</label><input id="g-tanggal" type="date" value="${existing?escapeHtml(existing.tanggal):todayISO()}"></div>
-      </div>
-      <div class="field"><label>Keterangan (opsional)</label><input id="g-ket" value="${existing?escapeHtml(existing.keterangan||""):""}"></div>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" id="m-cancel">Batal</button>
-        <button class="btn btn-primary" id="m-save">${existing?"Simpan Perubahan":"Tambah"}</button>
-      </div>
-    `);
-    document.getElementById("m-cancel").onclick = closeModal;
-    document.getElementById("m-save").onclick = ()=>{
-      const studentId = document.getElementById("g-student").value;
-      const mapel = document.getElementById("g-mapel").value.trim();
-      const jenis = document.getElementById("g-jenis").value;
-      const nilaiRaw = document.getElementById("g-nilai").value;
-      const tanggal = document.getElementById("g-tanggal").value;
-      const keterangan = document.getElementById("g-ket").value.trim();
-      const student = DB.students.find(s=>s.id===studentId);
-      if(!student || !mapel || nilaiRaw===""){ toast("Siswa, mata pelajaran, dan nilai wajib diisi","bad"); return; }
-      const nilai = parseFloat(nilaiRaw);
-      if(isNaN(nilai) || nilai < 0 || nilai > 100){ toast("Nilai harus di antara 0 dan 100","bad"); return; }
-      if(!tanggal){ toast("Tanggal wajib diisi","bad"); return; }
-      if(existing){
-        existing.studentId = studentId; existing.nis = student.nis; existing.namaSiswa = student.nama; existing.kelas = student.kelas;
-        existing.mapel = mapel; existing.jenis = jenis; existing.nilai = nilai; existing.tanggal = tanggal; existing.keterangan = keterangan;
-        toast("Nilai diperbarui","ok");
-      } else {
-        DB.grades.push({ id: uid("grades"), studentId, nis: student.nis, namaSiswa: student.nama, kelas: student.kelas, mapel, jenis, nilai, tanggal, keterangan });
-        toast("Nilai ditambahkan","ok");
-      }
-      saveData(); renderAll(); closeModal();
-    };
-  }
 
   function confirmDeleteNilai(id){
     const g = DB.grades.find(x=>x.id===id);
