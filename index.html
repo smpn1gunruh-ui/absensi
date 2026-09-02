@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root{
     --ink:#1B2333;
@@ -153,6 +154,25 @@
   .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:18px;}
   .panel h2{font-family:'Space Grotesk',sans-serif;font-size:15px;margin:0 0 14px 0;font-weight:700;display:flex;align-items:center;gap:8px;}
   .panel h2 .tag{font-size:10px;background:var(--paper);color:var(--muted);padding:2px 8px;border-radius:10px;font-family:'Inter';font-weight:600;}
+
+  /* Tabs inside Laporan */
+  .report-tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin-bottom:16px;padding-bottom:10px;}
+  .tab-btn{
+    background:var(--paper);border:1px solid var(--line);color:var(--muted);
+    padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+    font-family:'Inter',sans-serif;transition:all .15s;
+  }
+  .tab-btn:hover{background:#E5E5DE;color:var(--slate);}
+  .tab-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;}
+
+  /* Charts Container */
+  .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}
+  .chart-container{position:relative;height:240px;width:100%;}
+  @media(max-width:900px){
+    .chart-grid{grid-template-columns:1fr;}
+  }
 
   /* Buttons */
   .btn{
@@ -543,20 +563,44 @@
           </div>
         </div>
 
-        <div class="panel">
-          <h2>Rekap Per Siswa</h2>
-          <table>
-            <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Hadir</th><th>Terlambat</th><th>Izin</th><th>Sakit</th><th>Alpha</th><th>% Kehadiran</th></tr></thead>
-            <tbody id="lap-rekap-table"></tbody>
-          </table>
+        <!-- Bagan / Grafik Laporan -->
+        <div class="chart-grid">
+          <div class="panel" style="margin-bottom:0;">
+            <h2>Grafik Kehadiran <span class="tag">Akumulasi</span></h2>
+            <div class="chart-container">
+              <canvas id="chart-absensi"></canvas>
+            </div>
+          </div>
+          <div class="panel" style="margin-bottom:0;">
+            <h2>Grafik Rata-rata Nilai <span class="tag">Berdasarkan Jenis</span></h2>
+            <div class="chart-container">
+              <canvas id="chart-nilai"></canvas>
+            </div>
+          </div>
         </div>
 
-        <div class="panel">
-          <h2>Detail Catatan</h2>
-          <table>
-            <thead><tr><th>Tanggal</th><th>NIS</th><th>Nama</th><th>Kelas</th><th>Waktu</th><th>Status</th></tr></thead>
-            <tbody id="lap-detail-table"></tbody>
-          </table>
+        <!-- Tab Navigasi & Konten Laporan -->
+        <div class="panel" style="margin-top:18px;">
+          <div class="report-tabs">
+            <button class="tab-btn active" data-tab="tab-absensi">Rekap Absensi Siswa</button>
+            <button class="tab-btn" data-tab="tab-nilai">Rekap Nilai Siswa</button>
+          </div>
+
+          <div class="tab-content active" id="tab-absensi">
+            <h2>Rekap Per Siswa</h2>
+            <table>
+              <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Hadir</th><th>Terlambat</th><th>Izin</th><th>Sakit</th><th>Alpha</th><th>% Kehadiran</th></tr></thead>
+              <tbody id="lap-rekap-table"></tbody>
+            </table>
+          </div>
+
+          <div class="tab-content" id="tab-nilai">
+            <h2>Rekap Nilai Per Siswa</h2>
+            <table>
+              <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Mapel</th><th>Jenis Penilaian</th><th>Rata-rata / Nilai</th></tr></thead>
+              <tbody id="lap-rekap-nilai-table"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -679,6 +723,8 @@ let html5Qr = null;
 let camActive = false;
 let currentUser = null;
 let gasUrl = GAS_URL;
+let chartAbsensiInstance = null;
+let chartNilaiInstance = null;
 
   function todayISO(){
     const d = new Date();
@@ -974,6 +1020,20 @@ function doLogin(){
   });
 
   document.getElementById("today-chip").textContent = fmtTanggal(todayISO());
+
+  // Tab Navigation for Laporan
+  document.querySelectorAll(".report-tabs").forEach(tabContainer => {
+    tabContainer.addEventListener("click", (e) => {
+      const btn = e.target.closest(".tab-btn");
+      if(!btn) return;
+      const targetId = btn.dataset.tab;
+      tabContainer.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const parentPanel = tabContainer.closest(".panel");
+      parentPanel.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+      document.getElementById(targetId).classList.add("active");
+    });
+  });
 
   function getKelasList(){
     const set = new Set(DB.students.map(s=>s.kelas).filter(Boolean));
@@ -1511,6 +1571,96 @@ function doLogin(){
     toast("Data nilai diekspor ke Excel","ok");
   });
 
+  function renderCharts(records, students){
+    // 1. Chart Absensi (Pie / Doughnut Status Kehadiran)
+    const attCount = { Hadir: 0, Terlambat: 0, Izin: 0, Sakit: 0, Alpha: 0 };
+    records.forEach(r => {
+      if(attCount[r.status] !== undefined) attCount[r.status]++;
+    });
+
+    const ctxAbs = document.getElementById("chart-absensi");
+    if(ctxAbs){
+      if(chartAbsensiInstance) chartAbsensiInstance.destroy();
+      chartAbsensiInstance = new Chart(ctxAbs, {
+        type: 'doughnut',
+        data: {
+          labels: ['Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpha'],
+          datasets: [{
+            data: [attCount.Hadir, attCount.Terlambat, attCount.Izin, attCount.Sakit, attCount.Alpha],
+            backgroundColor: ['#2F7A4E', '#C9772E', '#4C4F6B', '#3B82F6', '#B23A32'],
+            borderWidth: 2,
+            borderColor: '#FFFFFF'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12, font: { family: 'Inter', size: 11 } } }
+          }
+        }
+      });
+    }
+
+    // 2. Chart Nilai (Bar Chart Rata-rata per Jenis Penilaian)
+    let gradesList = DB.grades.filter(g => students.find(s => s.id === g.studentId));
+
+    const jenisStats = {};
+    jenisOptions.forEach(opt => {
+      jenisStats[opt] = { total: 0, count: 0 };
+    });
+
+    gradesList.forEach(g => {
+      if(jenisStats[g.jenis]){
+        jenisStats[g.jenis].total += Number(g.nilai) || 0;
+        jenisStats[g.jenis].count += 1;
+      }
+    });
+
+    const nilaiLabels = jenisOptions.map(opt => {
+      if(opt.includes('—')) return opt.split('—')[0].trim();
+      return opt;
+    });
+    const nilaiData = jenisOptions.map(opt => {
+      const s = jenisStats[opt];
+      return s.count > 0 ? (s.total / s.count).toFixed(1) : 0;
+    });
+
+    const ctxNilai = document.getElementById("chart-nilai");
+    if(ctxNilai){
+      if(chartNilaiInstance) chartNilaiInstance.destroy();
+      chartNilaiInstance = new Chart(ctxNilai, {
+        type: 'bar',
+        data: {
+          labels: nilaiLabels,
+          datasets: [{
+            label: 'Rata-rata Nilai',
+            data: nilaiData,
+            backgroundColor: '#C9A227',
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              ticks: { font: { family: 'Inter', size: 11 } }
+            },
+            x: {
+              ticks: { font: { family: 'Inter', size: 10 } }
+            }
+          },
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      });
+    }
+  }
+
   function renderLaporan(){
     const dari = document.getElementById("lap-dari").value || "0000-01-01";
     const sampai = document.getElementById("lap-sampai").value || "9999-12-31";
@@ -1523,6 +1673,7 @@ function doLogin(){
 
     let records = DB.attendance.filter(a=> a.tanggal>=dari && a.tanggal<=sampai && students.find(s=>s.id===a.studentId));
 
+    // Rekap Absensi
     const rekapBody = document.getElementById("lap-rekap-table");
     if(students.length===0){
       rekapBody.innerHTML = `<tr><td colspan="9" class="empty-state">Tidak ada data untuk filter ini.</td></tr>`;
@@ -1543,25 +1694,31 @@ function doLogin(){
       }).join("");
     }
 
-    const detailBody = document.getElementById("lap-detail-table");
-    if(records.length===0){
-      detailBody.innerHTML = `<tr><td colspan="6" class="empty-state">Tidak ada catatan pada rentang ini.</td></tr>`;
+    // Rekap Nilai Siswa
+    const rekapNilaiBody = document.getElementById("lap-rekap-nilai-table");
+    let gradesList = DB.grades.filter(g => students.find(s => s.id === g.studentId));
+    if(students.length===0 || gradesList.length===0){
+      rekapNilaiBody.innerHTML = `<tr><td colspan="6" class="empty-state">Tidak ada data nilai untuk filter ini.</td></tr>`;
     } else {
-      detailBody.innerHTML = records.slice().sort((a,b)=> a.tanggal===b.tanggal ? a.waktu.localeCompare(b.waktu) : b.tanggal.localeCompare(a.tanggal)).map(r=>{
-        const s = DB.students.find(s=>s.id===r.studentId);
-        if(!s) return "";
-        const badgeMap = { Hadir:"badge-hadir", Terlambat:"badge-terlambat", Izin:"badge-izin", Sakit:"badge-sakit", Alpha:"badge-alpha" };
-        return `<tr>
-          <td>${fmtTanggal(r.tanggal)}</td>
+      rekapNilaiBody.innerHTML = students.slice().sort((a,b)=>a.nama.localeCompare(b.nama)).map(s => {
+        const sGrades = gradesList.filter(g => g.studentId === s.id);
+        if(sGrades.length === 0) return "";
+        return sGrades.map(g => `<tr>
           <td class="mono">${escapeHtml(s.nis)}</td>
           <td>${escapeHtml(s.nama)}</td>
           <td><span class="kelas-pill">${escapeHtml(s.kelas||"-")}</span></td>
-          <td class="mono">${r.waktu}</td>
-          <td><span class="badge ${badgeMap[r.status]||''}">${r.status}</span></td>
-        </tr>`;
+          <td>${escapeHtml(g.mapel||"-")}</td>
+          <td>${escapeHtml(g.jenis||"-")}</td>
+          <td><strong>${escapeHtml(g.nilai)}</strong></td>
+        </tr>`).join("");
       }).join("");
+      if(rekapNilaiBody.innerHTML.trim() === ""){
+        rekapNilaiBody.innerHTML = `<tr><td colspan="6" class="empty-state">Tidak ada data nilai untuk siswa terpilih.</td></tr>`;
+      }
     }
+
     window.__lastLaporan = { students, records };
+    renderCharts(records, students);
   }
   document.getElementById("btn-terapkan-filter").addEventListener("click", renderLaporan);
 
@@ -1579,20 +1736,18 @@ function doLogin(){
       return { NIS:s.nis, Nama:s.nama, Kelas:s.kelas||"", Hadir:c.Hadir, Terlambat:c.Terlambat, Izin:c.Izin, Sakit:c.Sakit, Alpha:c.Alpha, "% Kehadiran": recs.length ? pct+"%" : "-" };
     });
 
-    const detailRows = records.slice().sort((a,b)=>a.tanggal.localeCompare(b.tanggal)).map(r=>{
-      const s = DB.students.find(s=>s.id===r.studentId);
-      if(!s) return null;
-      return { Tanggal:r.tanggal, NIS:s.nis, Nama:s.nama, Kelas:s.kelas||"", Waktu:r.waktu, Status:r.status };
-    }).filter(Boolean);
+    const nilaiRows = DB.grades.filter(g => students.find(s => s.id === g.studentId)).map(g => ({
+      NIS: g.nis||"", Nama: g.namaSiswa||"", Kelas: g.kelas||"", Mapel: g.mapel||"", "Jenis Penilaian": g.jenis||"", Nilai: g.nilai, Tanggal: g.tanggal
+    }));
 
     const wb = XLSX.utils.book_new();
     const ws1 = XLSX.utils.json_to_sheet(rekapRows);
     ws1['!cols'] = [{wch:12},{wch:24},{wch:10},{wch:8},{wch:10},{wch:8},{wch:8},{wch:8},{wch:12}];
-    XLSX.utils.book_append_sheet(wb, ws1, "Rekap Per Siswa");
-    const ws2 = XLSX.utils.json_to_sheet(detailRows.length ? detailRows : [{ Tanggal:"", NIS:"", Nama:"", Kelas:"", Waktu:"", Status:"" }]);
-    ws2['!cols'] = [{wch:12},{wch:12},{wch:24},{wch:10},{wch:10},{wch:12}];
-    XLSX.utils.book_append_sheet(wb, ws2, "Detail Catatan");
-    XLSX.writeFile(wb, "laporan-absensi-"+todayISO()+".xlsx");
+    XLSX.utils.book_append_sheet(wb, ws1, "Rekap Absensi");
+    const ws2 = XLSX.utils.json_to_sheet(nilaiRows.length ? nilaiRows : [{ NIS:"", Nama:"", Kelas:"", Mapel:"", "Jenis Penilaian":"", Nilai:"", Tanggal:"" }]);
+    ws2['!cols'] = [{wch:12},{wch:24},{wch:10},{wch:14},{wch:22},{wch:8},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws2, "Rekap Nilai");
+    XLSX.writeFile(wb, "laporan-rekap-"+todayISO()+".xlsx");
     toast("Laporan diekspor ke Excel","ok");
   });
 
@@ -1618,13 +1773,13 @@ function doLogin(){
   document.getElementById("btn-print-laporan").addEventListener("click", ()=>{
     renderLaporan();
     const rekapHtml = document.getElementById("lap-rekap-table").parentElement.outerHTML;
-    const detailHtml = document.getElementById("lap-detail-table").parentElement.outerHTML;
+    const rekapNilaiHtml = document.getElementById("lap-rekap-nilai-table").parentElement.outerHTML;
     document.getElementById("print-area").innerHTML = `
       <div style="padding:20px;font-family:Inter,sans-serif;">
-        <h2 style="font-family:'Space Grotesk',sans-serif;">Laporan Absensi — ${escapeHtml(DB.settings.namaSekolah)}</h2>
+        <h2 style="font-family:'Space Grotesk',sans-serif;">Laporan & Rekap — ${escapeHtml(DB.settings.namaSekolah)}</h2>
         <p style="font-size:12px;color:#666;">Dicetak: ${fmtTanggal(todayISO())}</p>
-        <h3>Rekap Per Siswa</h3>${rekapHtml}
-        <h3>Detail Catatan</h3>${detailHtml}
+        <h3>Rekap Absensi Siswa</h3>${rekapHtml}
+        <h3 style="margin-top:20px;">Rekap Nilai Siswa</h3>${rekapNilaiHtml}
       </div>`;
     window.print();
   });
