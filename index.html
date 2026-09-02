@@ -252,8 +252,8 @@
   }
   .feed-time{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);}
 
-  select.status-select{
-    padding:5px 8px;border-radius:6px;border:1px solid var(--line);font-size:12px;font-family:'Inter';
+  select.status-select, select.nilai-jenis-input{
+    padding:5px 8px;border-radius:6px;border:1px solid var(--line);font-size:12px;font-family:'Inter';background:#fff;
   }
 
   /* Kartu / print */
@@ -492,7 +492,7 @@
           <div class="panel" style="margin:0; padding:0; box-shadow:none; border:0;">
             <div class="toolbar" style="margin-bottom:10px;">
               <h2 style="margin:0;">Daftar Nilai Siswa</h2>
-              <span class="tag">Pilih kelas, lalu isi penilaian dan nilai</span>
+              <span class="tag">Pilih kelas, lalu isi jenis penilaian dan nilai</span>
             </div>
             <div style="overflow-x:auto;">
               <table>
@@ -654,10 +654,7 @@
 
 const STORAGE_KEY = "absensi-app-data";
 
-// MASUKKAN URL APPS SCRIPT ANDA DISINI
-const GAS_URL =
-"https://script.google.com/macros/s/AKfycbxBP_1dNj2nuxK1UjcGvQ4CtRlWtyF92aW2FOylwe588-t60Lf_x8Dro5oS9myqRFRFcw/exec";
-
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxBP_1dNj2nuxK1UjcGvQ4CtRlWtyF92aW2FOylwe588-t60Lf_x8Dro5oS9myqRFRFcw/exec";
 
 let DB = {
     students: [],
@@ -681,9 +678,6 @@ let saveTimer = null;
 let html5Qr = null;
 let camActive = false;
 let currentUser = null;
-
-
-// sekarang tidak lagi mengambil dari localStorage
 let gasUrl = GAS_URL;
 
   function todayISO(){
@@ -701,8 +695,6 @@ let gasUrl = GAS_URL;
     return String(DB.counters[kind]);
   }
   function relinkByNis(){
-    // Data absensi & nilai dari Google Sheets hanya membawa NIS (bukan Student ID),
-    // jadi di sini kita cocokkan ulang ke id internal siswa yang sedang dipakai.
     const byNis = {};
     DB.students.forEach(s=>{ if(s.nis) byNis[s.nis] = s.id; });
     DB.attendance.forEach(a=>{ if(a.nis && byNis[a.nis]) a.studentId = byNis[a.nis]; });
@@ -758,7 +750,6 @@ let gasUrl = GAS_URL;
     return d+" "+bulan[parseInt(m,10)-1]+" "+y;
   }
   function hashPass(pw){
-    // Disimpan apa adanya (teks biasa) — tidak ada enkripsi/hashing.
     return String(pw);
   }
   function saveToLocal(){
@@ -798,199 +789,94 @@ let gasUrl = GAS_URL;
   }
 
 async function pushToGAS(){
-
     if(!gasUrl) return true;
-
     try{
-
         const response = await fetch(gasUrl,{
-
             method:"POST",
-
             headers:{
-                "Content-Type":
-                "text/plain;charset=utf-8"
+                "Content-Type": "text/plain;charset=utf-8"
             },
-
             body:JSON.stringify({
-
                 action:"save",
-
                 data:{
-
                     students:DB.students,
                     attendance:DB.attendance,
                     grades:DB.grades,
                     users:DB.users,
                     settings:DB.settings
-
                 }
-
             })
-
         });
-
-
         if(!response.ok){
-
-            throw new Error(
-                "Response : "+
-                response.status
-            );
-
+            throw new Error("Response : "+ response.status);
         }
-
-
-        const result =
-        await response.json();
-
-
-        return result &&
-               result.success;
-
-
+        const result = await response.json();
+        return result && result.success;
     }catch(err){
-
         console.error(err);
-
         return false;
-
     }
-
 }
 
 function saveData(){
-
     saveToLocal();
-
     clearTimeout(saveTimer);
-
     saveTimer = setTimeout(async()=>{
-
         const ok = await pushToGAS();
-
         if(gasUrl){
-
             if(ok){
                 toast("Data berhasil disimpan","ok");
             }else{
                 toast("Gagal menyimpan ke Spreadsheet","bad");
             }
-
         }
-
     },600);
-
 }
+
 async function loadData(){
-
-    const raw =
-    localStorage.getItem(
-        STORAGE_KEY
-    );
-
+    const raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
-
         try{
-
-            const parsed =
-            JSON.parse(raw);
-
-            DB.students =
-            parsed.students || [];
-
-            DB.attendance =
-            parsed.attendance || [];
-
-            DB.grades =
-            parsed.grades || [];
-
-            DB.users =
-            parsed.users || [];
-
-            DB.settings =
-            Object.assign(
-                DB.settings,
-                parsed.settings || {}
-            );
-
+            const parsed = JSON.parse(raw);
+            DB.students = parsed.students || [];
+            DB.attendance = parsed.attendance || [];
+            DB.grades = parsed.grades || [];
+            DB.users = parsed.users || [];
+            DB.settings = Object.assign(DB.settings, parsed.settings || {});
         }catch(e){
-
             console.error(e);
-
         }
-
     }
-
-
     recomputeCounters();
-
-
-    //jika belum ada user
     if(DB.users.length===0){
-
         DB.users.push({
-
             id:uid("users"),
             username:"admin",
             password:"admin123",
             nama:"Administrator",
             role:"Admin"
-
         });
-
     }
 
-
-
-    //SELALU SINKRONKAN DENGAN SPREADSHEET
     if(gasUrl){
-
         try{
-
-            toast(
-                "Menghubungkan ke Spreadsheet",
-                ""
-            );
-
-
-            const ok =
-            await syncWithGAS();
-
-
+            toast("Menghubungkan ke Spreadsheet", "");
+            const ok = await syncWithGAS();
             if(ok){
-
-                toast(
-                    "Sinkronisasi berhasil",
-                    "ok"
-                );
-
+                toast("Sinkronisasi berhasil", "ok");
             }else{
-
-                toast(
-                    "Gagal mengambil data Spreadsheet",
-                    "bad"
-                );
-
+                toast("Gagal mengambil data Spreadsheet", "bad");
             }
-
-
         }catch(err){
-
             console.error(err);
-
         }
-
     }
-
 
     await restoreSession();
-
     renderAll();
-
 }
+
   async function restoreSession(){
-    // Sesi tidak lagi dipulihkan otomatis — pengguna selalu wajib login ulang.
     showLogin();
   }
 
@@ -1018,88 +904,29 @@ async function loadData(){
   document.getElementById("btn-login").addEventListener("click", doLogin);
   document.getElementById("login-password").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
   document.getElementById("login-username").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
+
 function doLogin(){
+    const username = document.getElementById("login-username").value.trim();
+    const password = document.getElementById("login-password").value.trim();
+    const errEl = document.getElementById("login-error");
 
-    const username =
-    document.getElementById(
-    "login-username"
-    )
-    .value
-    .trim();
-
-
-    const password =
-    document.getElementById(
-    "login-password"
-    )
-    .value
-    .trim();
-
-
-    const errEl =
-    document.getElementById(
-    "login-error"
-    );
-
-
-    //cek data user sudah dimuat atau belum
     if(DB.users.length===0){
-
-        errEl.textContent =
-        "Data pengguna belum dimuat.";
-
-        errEl.style.display =
-        "block";
-
+        errEl.textContent = "Data pengguna belum dimuat.";
+        errEl.style.display = "block";
         return;
-
     }
 
-
-    const user =
-    DB.users.find(
-
-        u=>
-
-        String(u.username)
-        .trim()===username
-
-        &&
-
-        String(u.password)
-        .trim()===password
-
-    );
-
+    const user = DB.users.find(u => String(u.username).trim() === username && String(u.password).trim() === password);
 
     if(!user){
-
-        errEl.textContent =
-        "Username atau password salah.";
-
-        errEl.style.display =
-        "block";
-
+        errEl.textContent = "Username atau password salah.";
+        errEl.style.display = "block";
         return;
-
     }
 
-
-    errEl.style.display =
-    "none";
-
+    errEl.style.display = "none";
     loginSuccess(user);
-
-
-    toast(
-
-        "Selamat datang, "
-        +user.nama,
-
-        "ok"
-
-    );
-
+    toast("Selamat datang, " + user.nama, "ok");
 }
 
   document.getElementById("btn-logout").addEventListener("click", ()=>{
@@ -1116,7 +943,6 @@ function doLogin(){
     setTimeout(()=>{ el.remove(); }, 2600);
   }
 
-  /* Navigation */
   const titles = {
     dashboard: ["Dashboard","Ringkasan kehadiran hari ini"],
     siswa: ["Data Siswa","Kelola data dan barcode siswa"],
@@ -1149,7 +975,6 @@ function doLogin(){
 
   document.getElementById("today-chip").textContent = fmtTanggal(todayISO());
 
-  /* Kelas helpers */
   function getKelasList(){
     const set = new Set(DB.students.map(s=>s.kelas).filter(Boolean));
     return Array.from(set).sort();
@@ -1175,13 +1000,6 @@ function doLogin(){
         .slice().sort((a,b)=>a.nama.localeCompare(b.nama))
         .map(s=>`<option value="${s.id}">${escapeHtml(s.nama)} (${escapeHtml(s.nis)})</option>`).join("");
       if(DB.students.find(s=>s.id===curS)) lapSiswa.value = curS;
-    }
-    const mapelSelect = document.getElementById("nilai-filter-mapel");
-    if(mapelSelect){
-      const curM = mapelSelect.value;
-      const mapelList = getMapelList();
-      mapelSelect.innerHTML = '<option value="">Semua Mapel</option>' + mapelList.map(m=>`<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
-      if(mapelList.includes(curM)) mapelSelect.value = curM;
     }
   }
   function escapeHtml(str){
@@ -1233,7 +1051,6 @@ function doLogin(){
     }
   });
 
-  /* Camera scanning */
   const camBtn = document.getElementById("btn-toggle-cam");
   camBtn.addEventListener("click", ()=>{
     if(camActive) stopCamera(); else startCamera();
@@ -1267,7 +1084,6 @@ function doLogin(){
     camBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> Gunakan Kamera';
   }
 
-  /* Render: Dashboard */
   function renderDashboard(){
     const today = todayISO();
     const todaysRecords = DB.attendance.filter(a=>a.tanggal===today);
@@ -1317,7 +1133,6 @@ function doLogin(){
     document.getElementById("side-count-students").textContent = DB.students.length;
   }
 
-  /* Render: Siswa */
   function renderSiswaTable(){
     const search = document.getElementById("siswa-search").value.trim().toLowerCase();
     const kelasFilter = document.getElementById("siswa-filter-kelas").value;
@@ -1389,7 +1204,6 @@ function doLogin(){
 
   document.getElementById("btn-add-siswa").addEventListener("click", ()=>openSiswaModal(null));
 
-  /* Excel template & import/export */
   document.getElementById("btn-template-excel").addEventListener("click", ()=>{
     const ws = XLSX.utils.json_to_sheet([
       { NIS:"10001", Nama:"Contoh Siswa Satu", Kelas:"10-A", JK:"L" },
@@ -1497,7 +1311,6 @@ function doLogin(){
     };
   }
 
-  /* Render: Absensi table */
   function renderAbsensiTable(){
     const today = todayISO();
     const kelasFilter = document.getElementById("absensi-filter-kelas").value;
@@ -1543,7 +1356,6 @@ function doLogin(){
     toast("Status diperbarui","ok");
   });
 
-  /* Render: Nilai Siswa */
   function getFilteredGrades(){
     const search = document.getElementById("nilai-search").value.trim().toLowerCase();
     const kelasFilter = document.getElementById("nilai-filter-kelas").value;
@@ -1552,6 +1364,13 @@ function doLogin(){
     if(kelasFilter) list = list.filter(g => g.kelas === kelasFilter);
     return list.slice().sort((a,b)=> b.tanggal.localeCompare(a.tanggal) || (a.namaSiswa||"").localeCompare(b.namaSiswa||""));
   }
+
+  const jenisOptions = [
+    "Ulangan Harian",
+    "PTS/UTS — Penilaian Tengah Semester",
+    "PAS/UAS — Penilaian Akhir Semester",
+    "Praktik/Proyek"
+  ];
 
   function renderNilai(){
     const search = document.getElementById("nilai-search").value.trim().toLowerCase();
@@ -1571,13 +1390,17 @@ function doLogin(){
     } else {
       emptyEl.style.display = "none";
       tbody.innerHTML = students.map(s=>{
-        // Prefill from an existing record for the selected mapel/date, if available.
         const existing = DB.grades.find(g => g.studentId===s.id && (!mapel || g.mapel===mapel) && g.tanggal===tanggal);
+        const selectedJenis = existing?.jenis || jenisOptions[0];
         return `<tr>
           <td class="mono">${escapeHtml(s.nis||"-")}</td>
           <td>${escapeHtml(s.nama||"-")}</td>
           <td><span class="kelas-pill">${escapeHtml(s.kelas||"-")}</span></td>
-          <td><input class="nilai-jenis-input" data-student="${s.id}" value="${escapeHtml(existing?.jenis||"")}" placeholder="Contoh: Tugas 1"></td>
+          <td>
+            <select class="nilai-jenis-input" data-student="${s.id}">
+              ${jenisOptions.map(opt => `<option value="${escapeHtml(opt)}" ${selectedJenis === opt ? "selected" : ""}>${escapeHtml(opt)}</option>`).join("")}
+            </select>
+          </td>
           <td><input class="nilai-number-input" data-student="${s.id}" type="number" min="0" max="100" step="0.1" value="${existing?.nilai!==undefined?escapeHtml(existing.nilai):""}" placeholder="0-100"></td>
         </tr>`;
       }).join("");
@@ -1601,7 +1424,6 @@ function doLogin(){
       <td><strong>${escapeHtml(g.nilai)}</strong></td>
       <td>${fmtTanggal(g.tanggal)}</td>
       <td style="text-align:right;">
-        <button class="btn btn-ghost btn-sm" data-edit-nilai="${g.id}">Edit</button>
         <button class="btn btn-danger btn-sm" data-del-nilai="${g.id}">Hapus</button>
       </td>
     </tr>`).join("");
@@ -1635,7 +1457,6 @@ function doLogin(){
       const student = DB.students.find(s=>s.id===studentId);
       if(!student) return;
 
-      // Update the matching assessment, otherwise create a new record.
       let existing = DB.grades.find(g=>g.studentId===studentId && g.mapel===mapel && g.jenis===jenis && g.tanggal===tanggal);
       if(existing){
         existing.nis=student.nis; existing.namaSiswa=student.nama; existing.kelas=student.kelas; existing.nilai=nilai;
@@ -1652,9 +1473,7 @@ function doLogin(){
   });
 
   document.getElementById("nilai-riwayat-table").addEventListener("click", (e)=>{
-    const editId = e.target.dataset.editNilai;
     const delId = e.target.dataset.delNilai;
-    if(editId) openNilaiModal(DB.grades.find(g=>g.id===editId));
     if(delId) confirmDeleteNilai(delId);
   });
 
@@ -1692,7 +1511,6 @@ function doLogin(){
     toast("Data nilai diekspor ke Excel","ok");
   });
 
-  /* Render: Laporan */
   function renderLaporan(){
     const dari = document.getElementById("lap-dari").value || "0000-01-01";
     const sampai = document.getElementById("lap-sampai").value || "9999-12-31";
@@ -1811,7 +1629,6 @@ function doLogin(){
     window.print();
   });
 
-  /* Render: Kartu */
   function renderKartu(){
     const kelasFilter = document.getElementById("kartu-filter-kelas").value;
     let list = DB.students.slice().sort((a,b)=>a.nama.localeCompare(b.nama));
@@ -1842,7 +1659,6 @@ function doLogin(){
     window.print();
   });
 
-  /* Modal helpers */
   function showModal(innerHtml){
     const root = document.getElementById("modal-root");
     root.innerHTML = `<div class="modal-overlay" id="overlay"><div class="modal">${innerHtml}</div></div>`;
@@ -1850,7 +1666,6 @@ function doLogin(){
   }
   function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
 
-  /* Pengaturan */
   function renderPengaturan(){
     document.getElementById("set-gas-url").value = gasUrl;
     document.getElementById("set-nama-sekolah").value = DB.settings.namaSekolah;
@@ -1861,7 +1676,6 @@ function doLogin(){
   document.getElementById("btn-simpan-gas").addEventListener("click", async ()=>{
     const url = document.getElementById("set-gas-url").value.trim();
     gasUrl = url;
-    localStorage.setItem(GAS_URL_KEY, url);
     if(!url){
       toast("URL Google Script dikosongkan", "");
       return;
@@ -1912,7 +1726,6 @@ function doLogin(){
     };
   });
 
-  /* Akun Saya */
   function renderAkunSaya(){
     if(!currentUser) return;
     document.getElementById("me-nama").value = currentUser.nama;
@@ -1945,7 +1758,6 @@ function doLogin(){
     toast("Akun berhasil diperbarui","ok");
   });
 
-  /* Kelola User */
   function renderUserTable(){
     const tbody = document.getElementById("user-table");
     if(!tbody) return;
@@ -2044,69 +1856,32 @@ function doLogin(){
     };
   }
 
-  /* Render All */
-function renderAll(){
-
+  function renderAll(){
     fillKelasSelects();
-
     renderDashboard();
-
     renderSiswaTable();
-
     renderAbsensiTable();
-
     renderPengaturan();
-
     renderAkunSaya();
 
+    const laporan = document.getElementById("view-laporan");
+    const kartu = document.getElementById("view-kartu");
+    const nilai = document.getElementById("view-nilai");
+    const user = document.getElementById("view-user");
 
-    const laporan =
-    document.getElementById("view-laporan");
-
-    const kartu =
-    document.getElementById("view-kartu");
-
-    const nilai =
-    document.getElementById("view-nilai");
-
-    const user =
-    document.getElementById("view-user");
-
-
-    if(
-        laporan &&
-        laporan.classList.contains("active")
-    ){
+    if(laporan && laporan.classList.contains("active")){
         renderLaporan();
     }
-
-
-    if(
-        kartu &&
-        kartu.classList.contains("active")
-    ){
+    if(kartu && kartu.classList.contains("active")){
         renderKartu();
     }
-
-
-    if(
-        nilai &&
-        nilai.classList.contains("active")
-    ){
+    if(nilai && nilai.classList.contains("active")){
         renderNilai();
     }
-
-
-    if(
-        currentUser &&
-        user &&
-        user.classList.contains("active")
-    ){
+    if(currentUser && user && user.classList.contains("active")){
         renderUserTable();
     }
-
-}
-
+  }
 
   document.addEventListener("DOMContentLoaded", () => {
     loadData();
