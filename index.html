@@ -641,7 +641,7 @@
           <h2>Koneksi Google Spreadsheet</h2>
           <div class="field">
             <label>URL Apps Script (Web App Endpoint)</label>
-            <input id="set-gas-url" placeholder="https://script.google.com/macros/s/AKfycbyXHCMeoJKidtNZZ-xh1Z9pnsIAUG0hA6aS9NNpPpXrsYNhEtlgBb0GHr0SIAnnAr9o/exec">
+            <input id="set-gas-url" placeholder="https://script.google.com/macros/s/AKfycbwUQuPGDp_qz3YbwsCX8fyp_8IbzdweBMaZaSHHjmPz7YIS7MtOg0sq-hleAcDVeHejeA/exec">
           </div>
           <button class="btn btn-gold" id="btn-simpan-gas">Simpan & Sinkronkan</button>
         </div>
@@ -879,48 +879,55 @@ function saveData(){
     },600);
 }
 
-async function loadData(){
-    const raw = localStorage.getItem(STORAGE_KEY);
+function ensureDefaultAdmin(){
+    if(!Array.isArray(DB.users)) DB.users=[];
+    let admin=DB.users.find(u=>String(u.username||"").trim().toLowerCase()==="admin");
+    if(!admin){
+      admin={id:uid("users"),username:"admin",password:"admin123",nama:"Administrator",role:"Admin"};
+      DB.users.unshift(admin);
+    }
+    admin.username="admin";
+    if(!String(admin.password||"").trim()) admin.password="admin123";
+    if(!String(admin.nama||"").trim()) admin.nama="Administrator";
+    admin.role="Admin";
+    return admin;
+  }
+
+  async function loadData(){
+    const raw=localStorage.getItem(STORAGE_KEY);
     if(raw){
-        try{
-            const parsed = JSON.parse(raw);
-            DB.students = parsed.students || [];
-            DB.attendance = parsed.attendance || [];
-            DB.grades = parsed.grades || [];
-            DB.users = parsed.users || [];
-            DB.settings = Object.assign(DB.settings, parsed.settings || {});
-        }catch(e){
-            console.error(e);
-        }
+      try{
+        const parsed=JSON.parse(raw);
+        DB.students=Array.isArray(parsed.students)?parsed.students:[];
+        DB.attendance=Array.isArray(parsed.attendance)?parsed.attendance:[];
+        DB.grades=Array.isArray(parsed.grades)?parsed.grades:[];
+        DB.users=Array.isArray(parsed.users)?parsed.users:[];
+        DB.settings=Object.assign(DB.settings,parsed.settings||{});
+      }catch(e){ console.error("Gagal membaca localStorage:",e); }
     }
+    ensureDefaultAdmin();
     recomputeCounters();
-    if(DB.users.length===0){
-        DB.users.push({
-            id:uid("users"),
-            username:"admin",
-            password:"admin123",
-            nama:"Administrator",
-            role:"Admin"
-        });
-    }
-
     if(gasUrl){
-        try{
-            toast("Menghubungkan ke Spreadsheet", "");
-            const ok = await syncWithGAS();
-            if(ok){
-                toast("Sinkronisasi berhasil", "ok");
-            }else{
-                toast("Gagal mengambil data Spreadsheet", "bad");
-            }
-        }catch(err){
-            console.error(err);
+      try{
+        toast("Menghubungkan ke Spreadsheet","");
+        const ok=await syncWithGAS();
+        if(ok){
+          ensureDefaultAdmin(); recomputeCounters(); saveToLocal();
+          toast("Sinkronisasi berhasil","ok");
+        }else{
+          ensureDefaultAdmin();
+          toast("Spreadsheet tidak dapat diakses. Mode lokal digunakan.","bad");
         }
+      }catch(err){
+        console.error("Error sinkronisasi:",err);
+        ensureDefaultAdmin();
+        toast("Spreadsheet tidak dapat diakses. Mode lokal digunakan.","bad");
+      }
     }
-
+    ensureDefaultAdmin(); recomputeCounters(); saveToLocal();
     await restoreSession();
     renderAll();
-}
+  }
 
   async function restoreSession(){
     showLogin();
@@ -952,28 +959,39 @@ async function loadData(){
   document.getElementById("login-username").addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
 
 function doLogin(){
-    const username = document.getElementById("login-username").value.trim();
-    const password = document.getElementById("login-password").value.trim();
-    const errEl = document.getElementById("login-error");
+    const username=document.getElementById("login-username").value.trim();
+    const password=document.getElementById("login-password").value.trim();
+    const errEl=document.getElementById("login-error");
+    errEl.style.display="none";
 
-    if(DB.users.length===0){
-        errEl.textContent = "Data pengguna belum dimuat.";
-        errEl.style.display = "block";
-        return;
+    const admin=ensureDefaultAdmin();
+
+    // Login default selalu tersedia: admin / admin123
+    if(username.toLowerCase()==="admin" && password==="admin123"){
+      admin.username="admin";
+      admin.password="admin123";
+      admin.nama=admin.nama||"Administrator";
+      admin.role="Admin";
+      saveToLocal();
+      loginSuccess(admin);
+      toast("Selamat datang, Administrator","ok");
+      return;
     }
 
-    const user = DB.users.find(u => String(u.username).trim() === username && String(u.password).trim() === password);
+    const user=DB.users.find(u=>
+      String(u.username||"").trim().toLowerCase()===username.toLowerCase() &&
+      String(u.password||"").trim()===password
+    );
 
     if(!user){
-        errEl.textContent = "Username atau password salah.";
-        errEl.style.display = "block";
-        return;
+      errEl.textContent="Username atau password salah.";
+      errEl.style.display="block";
+      return;
     }
 
-    errEl.style.display = "none";
     loginSuccess(user);
-    toast("Selamat datang, " + user.nama, "ok");
-}
+    toast("Selamat datang, "+(user.nama||user.username),"ok");
+  }
 
   document.getElementById("btn-logout").addEventListener("click", ()=>{
     currentUser = null;
